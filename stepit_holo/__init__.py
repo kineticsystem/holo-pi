@@ -1,4 +1,4 @@
-"""Shows quilts on a Looking Glass display as holograms, without Looking Glass's software. See README.md."""
+"""Shows quilts on a Looking Glass Portrait as holograms. See README.md."""
 
 from .calibration import Calibration, find_calibration, load_calibration
 from .interleave import Interleaver, interleave

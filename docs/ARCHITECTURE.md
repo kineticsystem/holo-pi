@@ -19,6 +19,8 @@
 
 This document explains how StepIt Holo is built, what each part is responsible for, and where to start when we want to change something. It assumes we have read the [README](../README.md).
 
+StepIt Holo is made for the Looking Glass Portrait, and tested with it only; [How to Extend StepIt Holo](#how-to-extend-stepit-holo) says what another model may need.
+
 It follows one idea: **the display knows how it must be drawn**. Every Looking Glass carries its calibration on its own drive, and the formula that turns a quilt into the image its screen shows is a few lines of published math. StepIt Holo needs nothing else from Looking Glass: no service, no driver, no account.
 
 ## The Big Picture

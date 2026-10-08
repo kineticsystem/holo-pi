@@ -61,7 +61,7 @@ def show(hologram):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="stepit-holo", description="Show quilts on a Looking Glass, as holograms.")
+    parser = argparse.ArgumentParser(prog="stepit-holo", description="Show quilts on a Looking Glass Portrait, as holograms.")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
 

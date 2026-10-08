@@ -20,15 +20,18 @@
 
 ## Introduction
 
-StepIt Holo shows quilts on a Looking Glass display as holograms, without Looking Glass's software. It runs on Ubuntu and on Raspberry Pi OS, with Python, numpy, Pillow and GTK.
+StepIt Holo shows quilts on a **Looking Glass Portrait**, Looking Glass Factory's 7.9" 3D display, as holograms. It runs on Ubuntu and on Raspberry Pi OS, with Python, numpy, Pillow and GTK.
 
-A quilt is the format of Looking Glass's still holograms: one image holding a grid of views of a scene, each seen from a slightly different direction, e.g. 48 views in 8 columns and 6 rows for the Looking Glass Portrait. StepIt Holo:
+A quilt is the format of Looking Glass's still holograms: one image holding a grid of views of a scene, each seen from a slightly different direction, 48 views in 8 columns and 6 rows for the Portrait. StepIt Holo:
 
-- reads the display's calibration from the display itself: every Looking Glass carries it on its own USB drive;
-- interleaves the quilt into the image the display must show, so that each eye sees the right view through the display's lenses;
-- shows that image full-screen on the Looking Glass, pixel for pixel, whatever monitor the desktop puts new windows on.
+- reads the Portrait's calibration from the Portrait itself, which carries it on its own USB drive;
+- interleaves the quilt into the image the Portrait's screen must show, so that each eye sees the right view through its lenses;
+- shows that image full-screen on the Portrait, pixel for pixel, whatever monitor the desktop puts new windows on.
 
-It works with any quilt, from any software that makes them. It was made with a Looking Glass Portrait; other models should work, see [Troubleshooting](#troubleshooting).
+It works with any quilt, from any software that makes them.
+
+> [!NOTE]
+> StepIt Holo is made and tested with the Looking Glass Portrait only. Looking Glass's other displays use the same kind of calibration and may work, but none has been tried, and some carry calibration values that StepIt Holo does not use, see [Other Looking Glass Models](#troubleshooting).
 
 ## Try It
 
@@ -51,10 +54,10 @@ Through the lenses, the wasp stands in front of a white background, and turns as
   sudo apt install python3-numpy python3-pil python3-gi gir1.2-gtk-3.0
   ```
 
-- **A Looking Glass,** on HDMI and on USB to the same computer. The USB cable must carry data, not only power: through it, the desktop mounts the display's drive, e.g. `/media/<user>/LKG-P00671`, with its calibration. In the display settings, the Looking Glass is part of the desktop ("Join Displays"), in its own orientation. StepIt Holo draws at 100% whatever the desktop's scaling, so a whole factor, e.g. 200% on a 4K desktop, works too; a fractional one, e.g. 150%, does not under X11, where GNOME scales the whole screen image.
+- **A Looking Glass Portrait,** on HDMI and on USB to the same computer. The USB cable must carry data, not only power: through it, the desktop mounts the display's drive, e.g. `/media/<user>/LKG-P00671`, with its calibration. In the display settings, the Looking Glass is part of the desktop ("Join Displays"), in its own orientation. StepIt Holo draws at 100% whatever the desktop's scaling, so a whole factor, e.g. 200% on a 4K desktop, works too; a fractional one, e.g. 150%, does not under X11, where GNOME scales the whole screen image.
 
 > [!IMPORTANT]
-> No Looking Glass software is needed, and none may run on the Looking Glass at the same time: Looking Glass Bridge would draw over StepIt Holo's window.
+> Close Looking Glass Bridge if it runs: it would draw over StepIt Holo's window.
 
 ## Install StepIt Holo
 
@@ -158,7 +161,7 @@ The tests need no display: they check the calibration, the layouts, the interlea
 
 **A mix of numbers with `stepit-holo numbers`.** The window is not exactly on the Looking Glass, or the calibration is another display's. Check `stepit-holo calibration` against the drive of the display, and that the desktop's scaling is a whole factor, e.g. 100% or 200%.
 
-**Another Looking Glass model.** StepIt Holo uses the values that the Portrait's calibration holds, as Looking Glass's WebXR library uses them. A model whose `visual.json` has `subpixelCells` may lay out its sub-pixels differently, which StepIt Holo ignores: check with `stepit-holo numbers`.
+**Other Looking Glass models.** They are untested. StepIt Holo uses the values that the Portrait's calibration holds, as Looking Glass's WebXR library uses them, and reads the screen's size from the calibration, so another model may work as it is. A model whose `visual.json` has `subpixelCells`, e.g. one of the newer ones, lays out its sub-pixels differently, which StepIt Holo ignores, and will not. `stepit-holo numbers` shows which: one number at a time through the lenses, or a mix. The test quilt is a Portrait's, 8 x 6 views of aspect 0.75; on another model, its views are stretched, but the numbers still show.
 
 ## Licences
 
