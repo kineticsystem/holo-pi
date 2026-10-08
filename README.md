@@ -28,11 +28,11 @@ A quilt is the format of Looking Glass's still holograms: one image holding a gr
 - interleaves the quilt into the image the display must show, so that each eye sees the right view through the display's lenses;
 - shows that image full-screen on the Looking Glass, pixel for pixel, whatever monitor the desktop puts new windows on.
 
-It is part of the [StepIt](https://github.com/kineticsystem) projects, where [StepIt Stacker](https://github.com/kineticsystem/stepit-stacker) uses it to show the 3D pictures of the StepIt Macro rig, but it knows nothing of them: any quilt works. It was made with a Looking Glass Portrait; other models should work, see [Troubleshooting](#troubleshooting).
+It works with any quilt, from any software that makes them. It was made with a Looking Glass Portrait; other models should work, see [Troubleshooting](#troubleshooting).
 
 ## Try It
 
-The repo holds a sample quilt for the Looking Glass Portrait, [`quilts/wasp_qs8x6a0.75.jpg`](quilts/wasp_qs8x6a0.75.jpg): a wasp, a focus-stacked macro picture taken at 48 angles of a turning stage, 8 x 6 views of 420 x 560. With the [prerequisites](#prerequisites) in place, it takes three commands to see it in 3D:
+The repo holds a sample quilt for the Looking Glass Portrait, [`quilts/wasp_qs8x6a0.75.jpg`](quilts/wasp_qs8x6a0.75.jpg): a wasp, a macro photograph taken from 48 angles, 8 x 6 views of 420 x 560. With the [prerequisites](#prerequisites) in place, it takes three commands to see it in 3D:
 
 ```bash
 git clone https://github.com/kineticsystem/stepit-holo.git

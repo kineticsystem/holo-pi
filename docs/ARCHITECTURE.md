@@ -163,7 +163,7 @@ The table is saved in `~/.cache/stepit-holo`, named after a hash of everything i
 
 [`viewer.py`](../stepit_holo/viewer.py) shows the hologram in a GTK window, full-screen on the monitor of the calibration's size. One pixel off, and the hologram is drawn for the wrong lenses, so the window must cover that monitor exactly, at 100%: the viewer sets `GDK_SCALE=1` before GTK loads, whatever the desktop's scaling. Under X11, a whole factor, e.g. 200% on a 4K desktop, is applied by each program, and the screen keeps its pixels: the window still covers the Looking Glass pixel for pixel, checked on a Portrait at 200%. A fractional factor is not: GNOME scales the whole screen image, and no window can be pixel-exact. It hides the pointer, and closes on Escape or `q`.
 
-It prints `Showing on the monitor at x, y, width x height` once the window is full-screen and of the screen's size, and, under X11, at the monitor's position. A program that runs it, e.g. StepIt Stacker, waits for that line.
+It prints `Showing on the monitor at x, y, width x height` once the window is full-screen and of the screen's size, and, under X11, at the monitor's position. A program that runs it can wait for that line.
 
 ### Wayland and X11
 
