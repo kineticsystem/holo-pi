@@ -3,6 +3,7 @@
 ## Table of Contents <!-- omit in toc -->
 
 - [Introduction](#introduction)
+- [Try It](#try-it)
 - [Prerequisites](#prerequisites)
 - [Install StepIt Holo](#install-stepit-holo)
   - [Check out the Git Repository](#check-out-the-git-repository)
@@ -29,6 +30,18 @@ A quilt is the format of Looking Glass's still holograms: one image holding a gr
 
 It is part of the [StepIt](https://github.com/kineticsystem) projects, where [StepIt Stacker](https://github.com/kineticsystem/stepit-stacker) uses it to show the 3D pictures of the StepIt Macro rig, but it knows nothing of them: any quilt works. It was made with a Looking Glass Portrait; other models should work, see [Troubleshooting](#troubleshooting).
 
+## Try It
+
+The repo holds a sample quilt for the Looking Glass Portrait, [`quilts/wasp_qs8x6a0.75.jpg`](quilts/wasp_qs8x6a0.75.jpg): a wasp, a focus-stacked macro picture taken at 48 angles of a turning stage, 8 x 6 views of 420 x 560. With the [prerequisites](#prerequisites) in place, it takes three commands to see it in 3D:
+
+```bash
+git clone https://github.com/kineticsystem/stepit-holo.git
+cd stepit-holo
+./stepit-holo show quilts/wasp_qs8x6a0.75.jpg
+```
+
+Through the lenses, the wasp stands in front of a white background, and turns as you move your head sideways. Press Escape or `q` on its window to close it.
+
 ## Prerequisites
 
 - **Ubuntu 24.04 or Raspberry Pi OS (Bookworm),** with a desktop: GNOME on X11 or on Wayland, or Raspberry Pi OS's own, on Wayland. Other Linux desktops should work.
@@ -38,7 +51,7 @@ It is part of the [StepIt](https://github.com/kineticsystem) projects, where [St
   sudo apt install python3-numpy python3-pil python3-gi gir1.2-gtk-3.0
   ```
 
-- **A Looking Glass,** on HDMI and on USB to the same computer. The USB cable must carry data, not only power: through it, the desktop mounts the display's drive, e.g. `/media/<user>/LKG-P00671`, with its calibration. In the display settings, the Looking Glass is part of the desktop ("Join Displays"), in its own orientation, at 100% scaling.
+- **A Looking Glass,** on HDMI and on USB to the same computer. The USB cable must carry data, not only power: through it, the desktop mounts the display's drive, e.g. `/media/<user>/LKG-P00671`, with its calibration. In the display settings, the Looking Glass is part of the desktop ("Join Displays"), in its own orientation. StepIt Holo draws at 100% whatever the desktop's scaling, so a whole factor, e.g. 200% on a 4K desktop, works too; a fractional one, e.g. 150%, does not under X11, where GNOME scales the whole screen image.
 
 > [!IMPORTANT]
 > No Looking Glass software is needed, and none may run on the Looking Glass at the same time: Looking Glass Bridge would draw over StepIt Holo's window.
@@ -85,7 +98,7 @@ The layout comes from the file's name, as Looking Glass's own tools read it: `_q
 
 If the depth looks inside out, near parts behind far ones, the quilt's views go the other way. Add `--reverse`.
 
-[`quilts/wasp_qs8x6a0.75.jpg`](quilts/wasp_qs8x6a0.75.jpg) is a demo quilt for the Portrait: a wasp, a focus-stacked macro picture taken at 48 angles of a turning stage.
+The sample quilt, [`quilts/wasp_qs8x6a0.75.jpg`](quilts/wasp_qs8x6a0.75.jpg), is a quilt to compare yours with: it is known to look right on a Portrait.
 
 ### Check the Looking Glass with Numbered Views
 
@@ -139,11 +152,11 @@ The tests need no display: they check the calibration, the layouts, the interlea
 
 **`no Looking Glass found`.** The display's drive is not mounted. Check that its USB cable is plugged into this computer and carries data: `lsusb` lists `Looking Glass Portrait`, or your model, once it does, and the desktop mounts the drive a few seconds later.
 
-**`No monitor of 1536 x 2048`.** The Looking Glass is not part of the desktop at its own resolution: it is off, not on HDMI, mirrored instead of joined, or scaled. In the display settings, join it to the desktop at 100%.
+**`No monitor of 1536 x 2048`.** The Looking Glass is not part of the desktop at its own resolution: it is off, not on HDMI, mirrored instead of joined, or scaled by a fractional factor. In the display settings, join it to the desktop, at 100% or a whole factor such as 200%.
 
 **A grid of small images through the lenses.** The quilt is shown flat, as by a program that does not interleave it, e.g. Looking Glass Bridge in its window. Close the other program, and show the quilt with `stepit-holo show`.
 
-**A mix of numbers with `stepit-holo numbers`.** The window is not exactly on the Looking Glass, or the calibration is another display's. Check `stepit-holo calibration` against the drive of the display, and that the desktop scales the Looking Glass at 100%.
+**A mix of numbers with `stepit-holo numbers`.** The window is not exactly on the Looking Glass, or the calibration is another display's. Check `stepit-holo calibration` against the drive of the display, and that the desktop's scaling is a whole factor, e.g. 100% or 200%.
 
 **Another Looking Glass model.** StepIt Holo uses the values that the Portrait's calibration holds, as Looking Glass's WebXR library uses them. A model whose `visual.json` has `subpixelCells` may lay out its sub-pixels differently, which StepIt Holo ignores: check with `stepit-holo numbers`.
 
