@@ -1,4 +1,4 @@
-# StepIt Holo
+# HoloPi
 
 ## Table of Contents <!-- omit in toc -->
 
@@ -7,14 +7,14 @@
 - [Set Up the Raspberry Pi](#set-up-the-raspberry-pi)
   - [Install Raspberry Pi OS Lite](#install-raspberry-pi-os-lite)
   - [Install Docker and Git](#install-docker-and-git)
-  - [Install StepIt Holo](#install-stepit-holo)
+  - [Install HoloPi](#install-holopi)
   - [A Clean Screen at Boot](#a-clean-screen-at-boot)
 - [Show Quilts](#show-quilts)
   - [Upload a Quilt](#upload-a-quilt)
   - [Check the Looking Glass with Numbered Views](#check-the-looking-glass-with-numbered-views)
   - [What the Looking Glass Shows](#what-the-looking-glass-shows)
 - [Manage the Server](#manage-the-server)
-- [Other Ways to Run StepIt Holo](#other-ways-to-run-stepit-holo)
+- [Other Ways to Run HoloPi](#other-ways-to-run-holopi)
   - [On a Desktop](#on-a-desktop)
   - [The Server Without Docker](#the-server-without-docker)
   - [The Command Line Without a Desktop](#the-command-line-without-a-desktop)
@@ -26,13 +26,13 @@
 
 ## Introduction
 
-StepIt Holo turns a Raspberry Pi into a network display for the **Looking Glass Portrait**, Looking Glass Factory's 7.9" 3D display. Plug the Portrait into the Pi, and any computer on the network shows a hologram on it with one HTTP request:
+HoloPi turns a Raspberry Pi into a network display for the **Looking Glass Portrait**, Looking Glass Factory's 7.9" 3D display. Plug the Portrait into the Pi, and any computer on the network shows a hologram on it with one HTTP request:
 
 ```bash
 curl -F file=@wasp_qs8x6a0.75.jpg http://holo.local:8095/quilt
 ```
 
-The hologram is a quilt, the format of Looking Glass's still holograms: one image holding a grid of views of a scene, each seen from a slightly different direction, 48 views in 8 columns and 6 rows for the Portrait. It works with any quilt, from any software that makes them: a render, a photo session, a script. On the Pi, StepIt Holo:
+The hologram is a quilt, the format of Looking Glass's still holograms: one image holding a grid of views of a scene, each seen from a slightly different direction, 48 views in 8 columns and 6 rows for the Portrait. It works with any quilt, from any software that makes them: a render, a photo session, a script. On the Pi, HoloPi:
 
 - reads the Portrait's calibration from the Portrait itself, which carries it on its own USB drive;
 - interleaves the quilt into the image the Portrait's screen must show, so that each eye sees the right view through its lenses;
@@ -97,7 +97,7 @@ config:
 flowchart TB
     Maker["Any computer on the network<br/>curl, a script, a render pipeline"]
     subgraph Pi["Raspberry Pi with Raspberry Pi OS Lite, holo.local"]
-        Server["StepIt Holo's server, in Docker<br/>port 8095"]
+        Server["HoloPi's server, in Docker<br/>port 8095"]
     end
     Portrait["Looking Glass Portrait"]
     Maker -- "POST /quilt" --> Server
@@ -107,12 +107,12 @@ flowchart TB
     classDef default fill:#3b6fb6,stroke:#2c5590,color:#ffffff
 ```
 
-The Pi needs only Docker: StepIt Holo runs in a container that starts with the Pi. On a Pi 5, a quilt is on the Portrait about 0.3 seconds after its upload, and the Portrait shows a hologram about a minute and a half after the Pi is switched on.
+The Pi needs only Docker: HoloPi runs in a container that starts with the Pi. On a Pi 5, a quilt is on the Portrait about 0.3 seconds after its upload, and the Portrait shows a hologram about a minute and a half after the Pi is switched on.
 
-StepIt Holo also runs without a Pi, on an Ubuntu desktop with the Portrait as a second monitor, see [Other Ways to Run StepIt Holo](#other-ways-to-run-stepit-holo).
+HoloPi also runs without a Pi, on an Ubuntu desktop with the Portrait as a second monitor, see [Other Ways to Run HoloPi](#other-ways-to-run-holopi).
 
 > [!NOTE]
-> StepIt Holo is made and tested with the Looking Glass Portrait and a Raspberry Pi 5 only. Looking Glass's other displays use the same kind of calibration and may work, but none has been tried, see [Other Looking Glass Models](#troubleshooting). A Raspberry Pi 4 runs the same system, and should work too.
+> HoloPi is made and tested with the Looking Glass Portrait and a Raspberry Pi 5 only. Looking Glass's other displays use the same kind of calibration and may work, but none has been tried, see [Other Looking Glass Models](#troubleshooting). A Raspberry Pi 4 runs the same system, and should work too.
 
 ## Prerequisites
 
@@ -128,7 +128,7 @@ StepIt Holo also runs without a Pi, on an Ubuntu desktop with the Portrait as a 
 
 ### Install Raspberry Pi OS Lite
 
-StepIt Holo draws on the Portrait itself, which only works where no desktop holds the screen: install Raspberry Pi OS **Lite**, without a desktop. In Raspberry Pi Imager, on the computer:
+HoloPi draws on the Portrait itself, which only works where no desktop holds the screen: install Raspberry Pi OS **Lite**, without a desktop. In Raspberry Pi Imager, on the computer:
 
 1. **Device:** Raspberry Pi 5.
 2. **Operating system:** Raspberry Pi OS (other), then Raspberry Pi OS Lite (64-bit).
@@ -165,13 +165,13 @@ The group applies at the next login. Log in again, and check that Docker works w
 docker run --rm hello-world
 ```
 
-### Install StepIt Holo
+### Install HoloPi
 
 Check out the repo, build the image and start the server:
 
 ```bash
-git clone https://github.com/kineticsystem/stepit-holo.git
-cd stepit-holo
+git clone https://github.com/kineticsystem/holo-pi.git
+cd holo-pi
 ./docker/dock.sh build
 ./docker/dock.sh start
 ```
@@ -273,17 +273,17 @@ If a quilt cannot be shown, because the Looking Glass is unplugged or switched o
 
 ## Manage the Server
 
-`./docker/dock.sh`, in the checkout on the Pi, manages the container, `stepit-holo`:
+`./docker/dock.sh`, in the checkout on the Pi, manages the container, `holo-pi`:
 
 | Command | What it does |
 |---|---|
-| `build` | Builds the image, `stepit-holo:latest`. |
+| `build` | Builds the image, `holo-pi:latest`. |
 | `start` | Starts the server in the background. It then starts with the Pi. |
 | `logs` | Follows the server's output. |
 | `status` | Shows the state of the container. |
 | `shell` | Opens a terminal into the container. |
 | `stop` | Stops the server, until the next `start`. |
-| `clean` | Removes the container and the image; the volume of the last quilt, `stepit-holo_state`, stays. |
+| `clean` | Removes the container and the image; the volume of the last quilt, `holo-pi_state`, stays. |
 
 The image holds no code: the container runs the checkout, mounted read-only, so updating it is a pull and a restart:
 
@@ -296,18 +296,18 @@ Two environment variables of `start` change the server:
 
 | Variable | Default | What it is |
 |---|---|---|
-| `STEPIT_HOLO_PORT` | `8095` | The port. |
-| `STEPIT_HOLO_DEFAULT_QUILT` | `numbers` | What to show when no quilt is kept: `numbers`, the test quilt, or a quilt of the repo by its path, e.g. `quilts/wasp_qs8x6a0.75.jpg`. |
+| `HOLO_PI_PORT` | `8095` | The port. |
+| `HOLO_PI_DEFAULT_QUILT` | `numbers` | What to show when no quilt is kept: `numbers`, the test quilt, or a quilt of the repo by its path, e.g. `quilts/wasp_qs8x6a0.75.jpg`. |
 
-The container is privileged and runs as root, which setting the screen's mode and mounting the Portrait's drive need. It mounts the drive itself, read-only, inside the container only. It mounts the Pi's `/dev`, so that the Portrait can be unplugged and plugged in again, and listens on the Pi's network. Its volume, `stepit-holo_state`, keeps the last quilt and the tables of the interleaving.
+The container is privileged and runs as root, which setting the screen's mode and mounting the Portrait's drive need. It mounts the drive itself, read-only, inside the container only. It mounts the Pi's `/dev`, so that the Portrait can be unplugged and plugged in again, and listens on the Pi's network. Its volume, `holo-pi_state`, keeps the last quilt and the tables of the interleaving.
 
-## Other Ways to Run StepIt Holo
+## Other Ways to Run HoloPi
 
 The Pi is the easiest way to keep a Portrait showing holograms. The same code also runs on a desktop, with the Portrait as a second monitor, and from the command line.
 
 ### On a Desktop
 
-On Ubuntu 24.04 or Raspberry Pi OS with a desktop, GNOME on X11 or on Wayland, or Raspberry Pi OS's own on Wayland, StepIt Holo shows the hologram in a full-screen window on the Portrait. Other Linux desktops should work.
+On Ubuntu 24.04 or Raspberry Pi OS with a desktop, GNOME on X11 or on Wayland, or Raspberry Pi OS's own on Wayland, HoloPi shows the hologram in a full-screen window on the Portrait. Other Linux desktops should work.
 
 - Install Python's numpy and Pillow, and GTK 3's Python bindings:
 
@@ -316,26 +316,26 @@ On Ubuntu 24.04 or Raspberry Pi OS with a desktop, GNOME on X11 or on Wayland, o
   ```
 
 - Plug the Portrait into HDMI and USB. The desktop mounts its drive, e.g. on `/media/<user>/LKG-P00671`.
-- In the display settings, make the Portrait part of the desktop ("Join Displays"), in its own orientation. StepIt Holo draws at 100% whatever the desktop's scaling, so a whole factor, e.g. 200% on a 4K desktop, works too; a fractional one, e.g. 150%, does not under X11, where GNOME scales the whole screen image.
+- In the display settings, make the Portrait part of the desktop ("Join Displays"), in its own orientation. HoloPi draws at 100% whatever the desktop's scaling, so a whole factor, e.g. 200% on a 4K desktop, works too; a fractional one, e.g. 150%, does not under X11, where GNOME scales the whole screen image.
 
 Then, from a checkout, with no installation:
 
 ```bash
-git clone https://github.com/kineticsystem/stepit-holo.git
-cd stepit-holo
-./stepit-holo show quilts/wasp_qs8x6a0.75.jpg
+git clone https://github.com/kineticsystem/holo-pi.git
+cd holo-pi
+./holo-pi show quilts/wasp_qs8x6a0.75.jpg
 ```
 
-The hologram fills the Portrait until you press Escape or `q` on its window, or stop the command. The command says `Showing on the monitor at ...` once the window covers the Portrait, and ends without an error on Ctrl+C or `SIGTERM`. `--columns`, `--rows` and `--reverse` work as the fields of an upload, and `./stepit-holo numbers` shows the test quilt.
+The hologram fills the Portrait until you press Escape or `q` on its window, or stop the command. The command says `Showing on the monitor at ...` once the window covers the Portrait, and ends without an error on Ctrl+C or `SIGTERM`. `--columns`, `--rows` and `--reverse` work as the fields of an upload, and `./holo-pi numbers` shows the test quilt.
 
 > [!IMPORTANT]
-> Close Looking Glass Bridge if it runs: it would draw over StepIt Holo's window.
+> Close Looking Glass Bridge if it runs: it would draw over HoloPi's window.
 
-To have `stepit-holo` on the `PATH`, install it with pipx. `--system-site-packages` lets it use the system's numpy, Pillow and GTK bindings:
+To have `holo-pi` on the `PATH`, install it with pipx. `--system-site-packages` lets it use the system's numpy, Pillow and GTK bindings:
 
 ```bash
 sudo apt install pipx
-pipx install --system-site-packages git+https://github.com/kineticsystem/stepit-holo.git
+pipx install --system-site-packages git+https://github.com/kineticsystem/holo-pi.git
 ```
 
 ### The Server Without Docker
@@ -343,13 +343,13 @@ pipx install --system-site-packages git+https://github.com/kineticsystem/stepit-
 The server also runs outside Docker, e.g. on a desktop, where it shows in a full-screen window, or for development:
 
 ```bash
-./stepit-holo serve
+./holo-pi serve
 ```
 
 It needs FastAPI, uvicorn and python-multipart: `sudo apt install python3-fastapi python3-uvicorn python3-multipart` on Ubuntu 24.04, or `python3-python-multipart` instead of `python3-multipart` on Raspberry Pi OS Trixie and Debian 13, whose `python3-multipart` is another library. Or pipx's extra `server` installs them:
 
 ```bash
-pipx install --system-site-packages "stepit-holo[server] @ git+https://github.com/kineticsystem/stepit-holo.git"
+pipx install --system-site-packages "holo-pi[server] @ git+https://github.com/kineticsystem/holo-pi.git"
 ```
 
 The options:
@@ -360,7 +360,7 @@ The options:
 | `--port` | `8095` | The port. |
 | `--screen` | `auto` | `desktop`, a full-screen window; `drm`, straight on the screen; `auto`, the screen itself if nothing drives it, the desktop otherwise. |
 | `--calibration` | the Looking Glass's drive | A copy of `visual.json`. |
-| `--state` | `~/.local/state/stepit-holo` | Where the last quilt is kept, to show it again after a restart. |
+| `--state` | `~/.local/state/holo-pi` | Where the last quilt is kept, to show it again after a restart. |
 | `--default-quilt` | none | What to show when no quilt is kept, e.g. at the first start or after `DELETE /quilt`: `numbers`, the test quilt, or a quilt file whose name gives its layout, e.g. `quilts/wasp_qs8x6a0.75.jpg`. It is shown, not kept: an upload replaces it. |
 | `--mount-drive` | off | Mounts the Looking Glass's drive, read-only, when nothing has, e.g. without a desktop. Needs root. |
 
@@ -369,12 +369,12 @@ The options:
 On a computer with no desktop, `show` and `numbers` draw straight on the screen, as the server does, through DRM/KMS: they set the Looking Glass's own mode, 1536 x 2048 for a Portrait, and give the display controller the hologram, pixel for pixel. They do so by themselves when a graphics card has a connected screen that no other program drives, whatever `DISPLAY` says, e.g. over `ssh -X`; `--screen drm` asks for it:
 
 ```bash
-./stepit-holo show quilts/wasp_qs8x6a0.75.jpg --screen drm
+./holo-pi show quilts/wasp_qs8x6a0.75.jpg --screen drm
 ```
 
 The command says `Showing on HDMI-A-1 of /dev/dri/card1, 1536 x 2048`, and the hologram stays until Ctrl+C, when the console comes back. Our user must be in the group `video`, which owns `/dev/dri/card*`: Raspberry Pi OS puts the first user in it.
 
-Without a desktop, nothing mounts the Looking Glass's drive. Mount it once by its label, read-only, where StepIt Holo looks for it:
+Without a desktop, nothing mounts the Looking Glass's drive. Mount it once by its label, read-only, where HoloPi looks for it:
 
 ```bash
 ls /dev/disk/by-label/
@@ -390,16 +390,16 @@ Or copy its `LKG_calibration/visual.json` once, and give it with `--calibration 
 ### Save a Hologram and See the Calibration
 
 ```bash
-./stepit-holo render quilts/wasp_qs8x6a0.75.jpg -o hologram.png
+./holo-pi render quilts/wasp_qs8x6a0.75.jpg -o hologram.png
 ```
 
 It saves the image the Looking Glass would show, of the screen's size, e.g. 1536 x 2048, without showing it: it needs no screen. It still needs the calibration: the Looking Glass's drive, or `--calibration visual.json`, a copy of it.
 
 ```bash
-./stepit-holo calibration
+./holo-pi calibration
 ```
 
-It prints where it found the calibration, and the values it derives from it. Every command takes `--calibration <file>` to use a copy of `visual.json` instead of the drive's, e.g. on a computer the Looking Glass is not plugged into. `./stepit-holo numbers --quilt-output numbers_qs8x6a0.75.png` saves the test quilt instead of showing it.
+It prints where it found the calibration, and the values it derives from it. Every command takes `--calibration <file>` to use a copy of `visual.json` instead of the drive's, e.g. on a computer the Looking Glass is not plugged into. `./holo-pi numbers --quilt-output numbers_qs8x6a0.75.png` saves the test quilt instead of showing it.
 
 ### Use It as a Library
 
@@ -407,7 +407,7 @@ It prints where it found the calibration, and the values it derives from it. Eve
 import numpy as np
 from PIL import Image
 
-from stepit_holo import Interleaver, Layout, find_calibration
+from holo_pi import Interleaver, Layout, find_calibration
 
 calibration = find_calibration()
 quilt = np.asarray(Image.open("quilts/wasp_qs8x6a0.75.jpg").convert("RGB"))
@@ -415,7 +415,7 @@ interleaver = Interleaver(calibration, Layout(8, 6), quilt.shape[1], quilt.shape
 hologram = interleaver(quilt)  # An RGB array of the screen's size.
 ```
 
-An `Interleaver` works out once which sub-pixel of the quilt each sub-pixel of the screen takes, about a third of a second on a PC, and keeps the table in `~/.cache/stepit-holo`. Every quilt of the same layout and size then takes a lookup, about 15 ms on a PC. `stepit_holo.screen.open_screen()` opens the screen to show it on, see [The Screens](docs/ARCHITECTURE.md#the-screens).
+An `Interleaver` works out once which sub-pixel of the quilt each sub-pixel of the screen takes, about a third of a second on a PC, and keeps the table in `~/.cache/holo-pi`. Every quilt of the same layout and size then takes a lookup, about 15 ms on a PC. `holo_pi.screen.open_screen()` opens the screen to show it on, see [The Screens](docs/ARCHITECTURE.md#the-screens).
 
 ## Tests
 
@@ -423,7 +423,7 @@ An `Interleaver` works out once which sub-pixel of the quilt each sub-pixel of t
 python3 -m unittest discover tests
 ```
 
-The tests need no display: they check the calibration, the layouts, the interleaving against views checked through a Portrait's lenses, the test quilt, the DRM screen's helpers, the command line and, with FastAPI, httpx and python-multipart installed, the server with a fake screen. Without them, the server's tests are skipped. How StepIt Holo is built is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The tests need no display: they check the calibration, the layouts, the interleaving against views checked through a Portrait's lenses, the test quilt, the DRM screen's helpers, the command line and, with FastAPI, httpx and python-multipart installed, the server with a fake screen. Without them, the server's tests are skipped. How HoloPi is built is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Troubleshooting
 
@@ -441,19 +441,19 @@ The tests need no display: they check the calibration, the layouts, the interlea
 
 **`no monitor of 1536 x 2048`, on a desktop.** The Looking Glass is not part of the desktop at its own resolution: it is off, not on HDMI, mirrored instead of joined, or scaled by a fractional factor. In the display settings, join it to the desktop, at 100% or a whole factor such as 200%.
 
-**A grid of small images through the lenses.** The quilt is shown flat, as by a program that does not interleave it, e.g. Looking Glass Bridge in its window. Close the other program, and show the quilt with StepIt Holo.
+**A grid of small images through the lenses.** The quilt is shown flat, as by a program that does not interleave it, e.g. Looking Glass Bridge in its window. Close the other program, and show the quilt with HoloPi.
 
-**A mix of numbers with the test quilt.** The hologram is not exactly on the Looking Glass, or the calibration is another display's. Check `GET /calibration`, or `stepit-holo calibration`, against the display's drive, and, on a desktop, that the scaling is a whole factor, e.g. 100% or 200%.
+**A mix of numbers with the test quilt.** The hologram is not exactly on the Looking Glass, or the calibration is another display's. Check `GET /calibration`, or `holo-pi calibration`, against the display's drive, and, on a desktop, that the scaling is a whole factor, e.g. 100% or 200%.
 
 **The container's log says `Form data requires "python-multipart"`.** The image has Debian's `python3-multipart`, another library: build it again from this repo's [`docker/Dockerfile`](docker/Dockerfile), which installs `python3-python-multipart`.
 
-**Other Looking Glass models.** They are untested. StepIt Holo uses the values that the Portrait's calibration holds, as Looking Glass's WebXR library uses them, and reads the screen's size from the calibration, so another model may work as it is. A model whose `visual.json` has `subpixelCells`, e.g. one of the newer ones, lays out its sub-pixels differently, which StepIt Holo ignores, and will not. The test quilt shows which: one number at a time through the lenses, or a mix. It is a Portrait's, 8 x 6 views of aspect 0.75; on another model, its views are stretched, but the numbers still show.
+**Other Looking Glass models.** They are untested. HoloPi uses the values that the Portrait's calibration holds, as Looking Glass's WebXR library uses them, and reads the screen's size from the calibration, so another model may work as it is. A model whose `visual.json` has `subpixelCells`, e.g. one of the newer ones, lays out its sub-pixels differently, which HoloPi ignores, and will not. The test quilt shows which: one number at a time through the lenses, or a mix. It is a Portrait's, 8 x 6 views of aspect 0.75; on another model, its views are stretched, but the numbers still show.
 
 ## Licences
 
-StepIt Holo is released under the MIT licence, see [`LICENSE`](LICENSE).
+HoloPi is released under the MIT licence, see [`LICENSE`](LICENSE).
 
-The interleaving follows the formulas of Looking Glass's lenticular shader as their [WebXR library](https://github.com/Looking-Glass/looking-glass-webxr) publishes them, under the Apache 2.0 licence. StepIt Holo contains none of their code, and is not made or endorsed by Looking Glass Factory. Looking Glass is their trademark.
+The interleaving follows the formulas of Looking Glass's lenticular shader as their [WebXR library](https://github.com/Looking-Glass/looking-glass-webxr) publishes them, under the Apache 2.0 licence. HoloPi contains none of their code, and is not made or endorsed by Looking Glass Factory. Looking Glass is their trademark.
 
 | Software | Licence | Role |
 |---|---|---|

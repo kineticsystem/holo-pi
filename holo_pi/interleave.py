@@ -32,7 +32,7 @@ TABLE_VERSION = 1
 
 def cache_folder():
     base = os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache"
-    return Path(base) / "stepit-holo"
+    return Path(base) / "holo-pi"
 
 
 def table(calibration, layout, quilt_width, quilt_height, reverse=False):

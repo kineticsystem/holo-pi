@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "stepit-holo"
+name = "holo-pi"
 dynamic = ["version"]
 description = "Show quilts on a Looking Glass Portrait as holograms."
 readme = "README.md"
@@ -14,14 +14,14 @@ requires-python = ">=3.11"
 dependencies = ["numpy", "pillow"]
 
 [project.optional-dependencies]
-# stepit-holo serve: pipx install "stepit-holo[server] @ git+https://..."
+# holo-pi serve: pipx install "holo-pi[server] @ git+https://..."
 server = ["fastapi", "uvicorn", "python-multipart"]
 
 [project.scripts]
-stepit-holo = "stepit_holo.cli:main"
+holo-pi = "holo_pi.cli:main"
 
 [tool.setuptools]
-packages = ["stepit_holo"]
+packages = ["holo_pi"]
 
 [tool.setuptools.dynamic]
-version = { attr = "stepit_holo.__version__" }
+version = { attr = "holo_pi.__version__" }

@@ -16,10 +16,10 @@ from unittest import mock
 import numpy as np
 from PIL import Image
 
-from stepit_holo import Interleaver, Layout, drm, interleave, load_calibration, numbers_quilt
-from stepit_holo.calibration import Calibration, find_calibration, mount_drives
-from stepit_holo.cli import main
-from stepit_holo.screen import choose
+from holo_pi import Interleaver, Layout, drm, interleave, load_calibration, numbers_quilt
+from holo_pi.calibration import Calibration, find_calibration, mount_drives
+from holo_pi.cli import main
+from holo_pi.screen import choose
 
 HERE = Path(__file__).parent
 VISUAL = HERE / "portrait_visual.json"
@@ -71,15 +71,15 @@ class CalibrationTest(unittest.TestCase):
             labels.mkdir()
             Path(labels, "LKG-P00000").symlink_to("/dev/sdz1")
             Path(labels, "bootfs").symlink_to("/dev/sdy1")
-            with mock.patch("stepit_holo.calibration._mounted_devices", return_value=set()), \
-                    mock.patch("stepit_holo.calibration.subprocess.run") as run:
+            with mock.patch("holo_pi.calibration._mounted_devices", return_value=set()), \
+                    mock.patch("holo_pi.calibration.subprocess.run") as run:
                 self.assertEqual(mount_drives(labels, target), [target / "LKG-P00000"])
             run.assert_called_once()
             self.assertEqual(run.call_args.args[0],
                              ["mount", "-o", "ro,nosuid,nodev,noexec", "/dev/sdz1", str(target / "LKG-P00000")])
             # Already mounted, e.g. by a desktop: left alone.
-            with mock.patch("stepit_holo.calibration._mounted_devices", return_value={"/dev/sdz1"}), \
-                    mock.patch("stepit_holo.calibration.subprocess.run") as run:
+            with mock.patch("holo_pi.calibration._mounted_devices", return_value={"/dev/sdz1"}), \
+                    mock.patch("holo_pi.calibration.subprocess.run") as run:
                 self.assertEqual(mount_drives(labels, target), [])
             run.assert_not_called()
 
@@ -123,8 +123,8 @@ class InterleaveTest(unittest.TestCase):
     def test_caches_the_table_and_reuses_it(self):
         with tempfile.TemporaryDirectory() as cache, mock.patch.dict(os.environ, {"XDG_CACHE_HOME": cache}):
             first = Interleaver(self.calibration, PORTRAIT, 336, 336)
-            self.assertEqual(len(list(Path(cache, "stepit-holo").glob("table-*.npy"))), 1)
-            with mock.patch("stepit_holo.interleave.table", side_effect=AssertionError("computed again")):
+            self.assertEqual(len(list(Path(cache, "holo-pi").glob("table-*.npy"))), 1)
+            with mock.patch("holo_pi.interleave.table", side_effect=AssertionError("computed again")):
                 second = Interleaver(self.calibration, PORTRAIT, 336, 336)
             np.testing.assert_array_equal(first.table, second.table)
 
@@ -176,7 +176,7 @@ class DrmTest(unittest.TestCase):
 
 class ScreenChoiceTest(unittest.TestCase):
     def choose(self, free, environment):
-        with mock.patch("stepit_holo.drm.screen_free", return_value=free), \
+        with mock.patch("holo_pi.drm.screen_free", return_value=free), \
                 mock.patch.dict(os.environ, environment, clear=True):
             return choose()
 
@@ -192,7 +192,7 @@ class ScreenChoiceTest(unittest.TestCase):
         self.assertEqual(self.choose(False, {}), "drm")
 
     def test_a_kind_given_is_kept(self):
-        with mock.patch("stepit_holo.drm.screen_free", side_effect=AssertionError("probed")):
+        with mock.patch("holo_pi.drm.screen_free", side_effect=AssertionError("probed")):
             self.assertEqual(choose("desktop"), "desktop")
             self.assertEqual(choose("drm"), "drm")
 
@@ -249,7 +249,7 @@ class CommandLineTest(unittest.TestCase):
             close = staticmethod(lambda: None)
             run = staticmethod(lambda stop: stop.wait(1))
 
-        with mock.patch("stepit_holo.cli.open_screen", return_value=Screen()):
+        with mock.patch("holo_pi.cli.open_screen", return_value=Screen()):
             code, output = self.run_main("numbers", "--calibration", str(VISUAL), "--screen", "drm")
         self.assertEqual(code, 0)
         self.assertIn("Showing on a screen of 1536 x 2048", output)

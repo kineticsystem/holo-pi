@@ -1,4 +1,4 @@
-# StepIt Holo's server, on Debian 13: Python, numpy, Pillow, FastAPI, uvicorn
+# HoloPi's server, on Debian 13: Python, numpy, Pillow, FastAPI, uvicorn
 # and libdrm, all from Debian's packages, built for amd64 and arm64, e.g. a
 # Raspberry Pi 5. The code is not in the image: docker-compose.yml mounts the
 # repo, so that a `git pull` and a restart update it.
@@ -20,6 +20,6 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 # The tables of the interleaving, next to the last quilt, in the volume of
 # docker-compose.yml: a restart reuses them.
-ENV XDG_CACHE_HOME=/var/lib/stepit-holo/cache
+ENV XDG_CACHE_HOME=/var/lib/holo-pi/cache
 
-WORKDIR /stepit-holo
+WORKDIR /holo-pi

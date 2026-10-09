@@ -1,6 +1,6 @@
 """The HTTP server: any computer on the network shows a quilt on the Looking Glass by uploading it.
 
-`stepit-holo serve` runs it: FastAPI, served by uvicorn on a thread of its own,
+`holo-pi serve` runs it: FastAPI, served by uvicorn on a thread of its own,
 while the main thread runs the screen, GTK's loop on a desktop. Display holds
 what is shown: it reads the calibration once it is there, keeps the table of
 the last layouts in memory, and keeps the last quilt on disk, to show it again
@@ -46,7 +46,7 @@ SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
 
 def state_folder():
     base = os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state"
-    return Path(base) / "stepit-holo"
+    return Path(base) / "holo-pi"
 
 
 class QuiltError(ValueError):
@@ -347,7 +347,7 @@ class QuiltModel(BaseModel):
 
 
 class StatusModel(BaseModel):
-    version: str = Field(description="The version of StepIt Holo.")
+    version: str = Field(description="The version of HoloPi.")
     screen: str = Field(description="How it shows: drm, straight to the screen, without a desktop, or desktop, "
                                     "in a full-screen window.")
     looking_glass: Optional[LookingGlassModel] = Field(None, description="The Looking Glass, once its "
@@ -374,7 +374,7 @@ class ErrorModel(BaseModel):
 
 def create_app(display):
     """The FastAPI application that shows quilts on `display`."""
-    app = FastAPI(title="StepIt Holo", version=__version__, description=DESCRIPTION, openapi_tags=TAGS)
+    app = FastAPI(title="HoloPi", version=__version__, description=DESCRIPTION, openapi_tags=TAGS)
 
     @app.get("/", include_in_schema=False)
     def home():
@@ -391,7 +391,7 @@ def create_app(display):
                                                                   "not there."}})
     def calibration():
         """The values the interleaving derives from the Looking Glass's `visual.json`, as
-        `stepit-holo calibration` prints them."""
+        `holo-pi calibration` prints them."""
         try:
             return asdict(display.calibration())
         except RuntimeError as error:
@@ -478,7 +478,7 @@ def serve(host="0.0.0.0", port=8095, screen="auto", calibration=None, state=None
     thread = threading.Thread(target=run_server, name="uvicorn", daemon=True)
     thread.start()
     display.start()
-    log.info("StepIt Holo %s on %s, showing through %s", __version__, f"http://{host}:{port}", screen.name)
+    log.info("HoloPi %s on %s, showing through %s", __version__, f"http://{host}:{port}", screen.name)
     try:
         screen.run(stop)
     finally:
