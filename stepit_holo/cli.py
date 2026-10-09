@@ -75,7 +75,8 @@ def serve(arguments):
     except ImportError as error:
         raise RuntimeError(f"the server needs FastAPI, uvicorn and python-multipart: {error}") from error
     return run_server(host=arguments.host, port=arguments.port, screen=arguments.screen,
-                      calibration=arguments.calibration, state=arguments.state, mount=arguments.mount_drive)
+                      calibration=arguments.calibration, state=arguments.state, mount=arguments.mount_drive,
+                      default=arguments.default_quilt)
 
 
 def main(argv=None):
@@ -116,6 +117,9 @@ def main(argv=None):
     server.add_argument("--state", type=Path,
                         help="where to keep the last quilt, to show it again after a restart; "
                              "default: ~/.local/state/stepit-holo")
+    server.add_argument("--default-quilt", metavar="QUILT",
+                        help="what to show when no quilt is kept, e.g. at the first start: numbers, the test "
+                             "quilt, or a quilt file whose name gives its layout, e.g. quilts/wasp_qs8x6a0.75.jpg")
     server.add_argument("--mount-drive", action="store_true",
                         help="mount the Looking Glass's drive, read-only, if nothing has, e.g. without a desktop; "
                              "needs root")

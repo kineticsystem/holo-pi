@@ -18,6 +18,7 @@
   - [Start the Server](#start-the-server)
   - [Upload a Quilt](#upload-a-quilt)
   - [Run the Server in Docker](#run-the-server-in-docker)
+  - [A Clean Screen at Boot](#a-clean-screen-at-boot)
 - [Use It as a Library](#use-it-as-a-library)
 - [Tests](#tests)
 - [Troubleshooting](#troubleshooting)
@@ -256,6 +257,7 @@ It chooses its screen as `show` does: straight on a screen that nothing drives, 
 | `--screen` | `auto` | `desktop`, a full-screen window; `drm`, straight on the screen; `auto`, the screen itself if nothing drives it, the desktop otherwise. |
 | `--calibration` | the Looking Glass's drive | A copy of `visual.json`. |
 | `--state` | `~/.local/state/stepit-holo` | Where the last quilt is kept, to show it again after a restart. |
+| `--default-quilt` | none | What to show when no quilt is kept, e.g. at the first start or after `DELETE /quilt`: `numbers`, the test quilt, or a quilt file whose name gives its layout, e.g. `quilts/wasp_qs8x6a0.75.jpg`. It is shown, not kept: an upload replaces it. |
 | `--mount-drive` | off | Mounts the Looking Glass's drive, read-only, when nothing has, e.g. without a desktop. Needs root. |
 
 The server reads the calibration at the first quilt. If it cannot show a quilt, because the Looking Glass is not plugged in or switched off, it keeps it, answers `503` with the reason, and tries again every 5 seconds: the quilt shows as soon as the Looking Glass is there.
@@ -320,10 +322,38 @@ git pull
 ./docker/dock.sh stop && ./docker/dock.sh start
 ```
 
+With no quilt kept, the container shows the sample wasp, [`quilts/wasp_qs8x6a0.75.jpg`](quilts/wasp_qs8x6a0.75.jpg). `STEPIT_HOLO_DEFAULT_QUILT=numbers ./docker/dock.sh start` shows the test quilt instead, or any quilt of the repo by its path.
+
 The container is privileged and runs as root, which setting the screen's mode and mounting the drive need; it mounts the host's `/dev`, so that the Looking Glass can be unplugged and plugged in again, and listens on the host's network, on port 8095, or `STEPIT_HOLO_PORT`. Its volume, `stepit-holo_state`, keeps the last quilt and the tables of the interleaving.
 
 > [!IMPORTANT]
 > On a computer with a desktop, the container cannot show: the desktop holds the screens. There, run `./stepit-holo serve` outside Docker.
+
+### A Clean Screen at Boot
+
+On a Raspberry Pi without a desktop, the screen shows the Pi's console until the server draws: the rainbow splash, the kernel's messages and the login prompt, for the minute or so the Pi and Docker take to start. Three changes leave it black instead, until the quilt appears.
+
+In `/boot/firmware/cmdline.txt`, one line, replace `console=tty1` with `console=tty3`, which moves the kernel's messages off the screen, and add at the end of the line:
+
+```
+quiet loglevel=3 logo.nologo vt.global_cursor_default=0 consoleblank=0
+```
+
+`vt.global_cursor_default=0` hides the blinking cursor, and `consoleblank=0` keeps the console from blanking the screen.
+
+At the end of `/boot/firmware/config.txt`, for no rainbow splash at power-on:
+
+```
+disable_splash=1
+```
+
+And no login prompt on the screen:
+
+```bash
+sudo systemctl disable getty@tty1
+```
+
+Reboot. The login prompt is only of use with a keyboard and a user with a password: SSH is not affected. `sudo systemctl enable getty@tty1` brings it back.
 
 ## Use It as a Library
 

@@ -108,6 +108,42 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(display.quilt_status()["name"], "test_qs8x6a0.75.png")
         np.testing.assert_array_equal(screen.shown, self.screen.shown)
 
+    def restart(self, default):
+        """A new server on the same state folder, with a default quilt: returns its screen."""
+        screen = FakeScreen()
+        display = Display(screen, calibration=VISUAL, state=self.state, mount=False, default=default)
+        display.restore()
+        display.retry()
+        return screen, display
+
+    def test_shows_the_default_quilt_when_none_is_kept(self):
+        screen, display = self.restart("numbers")
+        self.assertEqual(display.quilt_status()["name"], "numbers")
+        self.assertEqual(screen.shown.shape, (2048, 1536, 3))
+        # Shown, not kept: the next start shows the default again, not a copy of it.
+        self.assertEqual(list(self.state.glob("quilt*")), [])
+
+    def test_a_default_quilt_file_gives_its_layout_by_its_name(self):
+        quilt = self.state / "default_qs8x6a0.75.png"
+        quilt.write_bytes(self.quilt)
+        screen, display = self.restart(str(quilt))
+        status = display.quilt_status()
+        self.assertEqual((status["name"], status["columns"], status["rows"], status["shown"]),
+                         ("default_qs8x6a0.75.png", 8, 6, True))
+
+    def test_a_kept_quilt_wins_over_the_default(self):
+        self.upload()
+        _, display = self.restart("numbers")
+        self.assertEqual(display.quilt_status()["name"], "test_qs8x6a0.75.png")
+
+    def test_a_default_without_a_layout_shows_nothing(self):
+        quilt = self.state / "default.png"
+        quilt.write_bytes(self.quilt)
+        with self.assertLogs("stepit_holo.server", "WARNING"):
+            screen, display = self.restart(str(quilt))
+        self.assertIsNone(display.quilt_status())
+        self.assertIsNone(screen.shown)
+
     def test_gives_the_quilt_back(self):
         self.assertEqual(self.client.get("/quilt").status_code, 404)
         self.upload()
