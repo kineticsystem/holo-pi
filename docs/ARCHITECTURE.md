@@ -236,7 +236,7 @@ The easy detail to break is the row length: a buffer's rows are `pitch` bytes ap
 
 - **The calibration,** read at the first quilt, then kept. When the drive is not mounted and the server was started with `--mount-drive`, it mounts it itself, read-only, as root, by its label, `/dev/disk/by-label/LKG-*`, under `/media/stepit-holo`, with `mount_drives()` of [`calibration.py`](../stepit_holo/calibration.py).
 - **The tables** of the last two layouts and sizes of quilt, in memory, about 38 MB each: a quilt of the same layout is a lookup.
-- **The quilt,** its picture, and a copy of the uploaded file in the state folder, with `quilt.json`, which says its name, layout and order. At start, `restore()` takes it back.
+- **The quilt,** its picture, and a copy of the uploaded file in the state folder, with `quilt.json`, which says its name, layout and order. At start, `restore()` takes it back, or, when none is kept, the default quilt of `--default-quilt`, which is shown and not kept: an upload replaces it, and the next start shows it again.
 - **Whether it is shown,** where, or why not.
 
 An upload is checked first: an image, of a layout from its name or its fields; otherwise `400`, and the quilt before stays. A good quilt replaces the one before, on disk too, even when it cannot be shown: no calibration, or no screen of its size. The server then answers `503` with the reason, and a thread tries again every 5 seconds, so that the quilt shows as soon as the Looking Glass is plugged in or switched on, and after a restart before it is.
@@ -253,6 +253,7 @@ An upload is checked first: an image, of a layout from its name or its fields; o
 | `/dev` of the host | The cards and the drive, which come back under new names when the Looking Glass is unplugged and plugged in again. |
 | `/media` of the host, read-only, as `/run/media` | A drive the host has mounted, e.g. by a desktop, is found there; the container could not mount it again. |
 | The volume `stepit-holo_state`, on `/var/lib/stepit-holo` | The last quilt and the tables survive a restart and a new image. |
+| `--default-quilt`, the sample wasp, or `STEPIT_HOLO_DEFAULT_QUILT` | Something on the Looking Glass from the first start, rather than the console. |
 | `network_mode: host`, `restart: unless-stopped` | The server on the host's port 8095, started with the computer. |
 
 ## The Test Quilt
@@ -272,7 +273,7 @@ An upload is checked first: an image, of a layout from its name or its fields; o
 | `CommandLineTest` | `render`, `numbers` and `calibration`, `Showing on` from `show` with a fake screen, and the demo quilt's layout. |
 | `DrmTest` | The ioctls against the kernel's numbers, the choice of the Looking Glass's mode, the pixel format, and the message without a card. |
 | `ScreenChoiceTest` | `auto`: DRM/KMS on a screen that nothing drives whatever `DISPLAY` says, the desktop when it holds the screens, DRM/KMS without either, a kind given kept, and the master's test. |
-| `ServerTest`, in [`test_server.py`](../tests/test_server.py) | Every route with a fake screen: an upload interleaved and shown, the layout from the fields, a quilt refused, a quilt kept while the screen is off and shown when it is on, the last quilt after a restart, the quilt read back and removed, the test quilt, the status, the calibration, the drive mounted only with `--mount-drive`, and a summary and a description for every route. Skipped without FastAPI, httpx and python-multipart. |
+| `ServerTest`, in [`test_server.py`](../tests/test_server.py) | Every route with a fake screen: an upload interleaved and shown, the layout from the fields, a quilt refused, a quilt kept while the screen is off and shown when it is on, the last quilt after a restart, the default quilt when none is kept, by its name or `numbers`, and not over a kept one, the quilt read back and removed, the test quilt, the status, the calibration, the drive mounted only with `--mount-drive`, and a summary and a description for every route. Skipped without FastAPI, httpx and python-multipart. |
 
 The reference views of [`tests/reference_views.json`](../tests/reference_views.json) allow 1% to differ: at the edge between two views, floating-point rounding may differ between processors, e.g. a PC and a Raspberry Pi. The calibration of [`tests/portrait_visual.json`](../tests/portrait_visual.json) is a real Portrait's, with its serial number replaced.
 

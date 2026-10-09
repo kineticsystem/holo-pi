@@ -68,10 +68,12 @@ class Quilt:
 class Display:
     """What the Looking Glass shows, and the calibration it is shown with. Thread-safe."""
 
-    def __init__(self, screen, calibration=None, state=None, mount=False):
+    def __init__(self, screen, calibration=None, state=None, mount=False, default=None):
         self.screen = screen
         self.calibration_path = calibration
         self.state = Path(state) if state else None
+        # What to show when no quilt is kept, e.g. at the first start: "numbers", or the path of a quilt.
+        self.default = default
         # Without a desktop, nothing mounts the Looking Glass's drive: with `mount`, the server mounts it itself,
         # which needs root, e.g. in its container.
         self.mount = mount
@@ -216,8 +218,9 @@ class Display:
             path.unlink(missing_ok=True)
 
     def restore(self):
-        """Takes back the quilt kept by the last run, if any: start() shows it."""
+        """Takes back the quilt kept by the last run, or else the default quilt, if any: start() shows it."""
         if self.state is None or not (self.state / "quilt.json").exists():
+            self._take_default()
             return
         try:
             quilt = Quilt(**json.loads((self.state / "quilt.json").read_text()))
@@ -228,6 +231,30 @@ class Display:
         with self.lock:
             self.quilt, self.picture = quilt, picture
         log.info("Taking back %s, uploaded %s", quilt.name, quilt.uploaded)
+
+    def _take_default(self):
+        """The default quilt, not kept: an upload replaces it, and the next start shows it again."""
+        if not self.default:
+            return
+        if self.default == NUMBERS:
+            picture, layout, name = numbers_quilt(), Layout(8, 6), NUMBERS
+        else:
+            path = Path(self.default)
+            layout = Layout.from_name(path)
+            if layout is None:
+                log.warning("No default quilt: no layout in the name %s, e.g. _qs8x6a0.75", path.name)
+                return
+            try:
+                picture = read_quilt(path)
+            except RuntimeError as error:
+                log.warning("No default quilt: %s", error)
+                return
+            name = path.name
+        with self.lock:
+            self.quilt = Quilt(name, layout.columns, layout.rows, False, picture.shape[1], picture.shape[0], _now(),
+                               None)
+            self.picture = picture
+        log.info("Showing the default quilt, %s", name)
 
     def quilt_file(self):
         """The path of the quilt's copy, or None."""
@@ -431,13 +458,13 @@ def create_app(display):
     return app
 
 
-def serve(host="0.0.0.0", port=8095, screen="auto", calibration=None, state=None, mount=False):
+def serve(host="0.0.0.0", port=8095, screen="auto", calibration=None, state=None, mount=False, default=None):
     """Runs the server until it is interrupted or terminated. Returns the exit code."""
     import uvicorn
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s", force=True)
     screen = open_screen(screen, closable=False)
-    display = Display(screen, calibration=calibration, state=state or state_folder(), mount=mount)
+    display = Display(screen, calibration=calibration, state=state or state_folder(), mount=mount, default=default)
     display.restore()
     server = uvicorn.Server(uvicorn.Config(create_app(display), host=host, port=port, log_level="info"))
     stop = threading.Event()
