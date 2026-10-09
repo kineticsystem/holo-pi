@@ -1,6 +1,8 @@
-"""Tests the calibration, the layout, the interleaving, the test quilt and the command line, without a display."""
+"""Tests the calibration, the layout, the interleaving, the test quilt, the DRM screen's helpers and the command
+line, without a display."""
 
 import contextlib
+import errno
 import io
 import json
 import math
@@ -14,9 +16,10 @@ from unittest import mock
 import numpy as np
 from PIL import Image
 
-from stepit_holo import Interleaver, Layout, interleave, load_calibration, numbers_quilt
-from stepit_holo.calibration import Calibration, find_calibration
+from stepit_holo import Interleaver, Layout, drm, interleave, load_calibration, numbers_quilt
+from stepit_holo.calibration import Calibration, find_calibration, mount_drives
 from stepit_holo.cli import main
+from stepit_holo.screen import choose
 
 HERE = Path(__file__).parent
 VISUAL = HERE / "portrait_visual.json"
@@ -60,6 +63,25 @@ class CalibrationTest(unittest.TestCase):
     def test_says_what_to_check_when_there_is_none(self):
         with tempfile.TemporaryDirectory() as mount, self.assertRaisesRegex(RuntimeError, "USB cable"):
             find_calibration([mount])
+
+
+    def test_mounts_the_drive_that_nothing_mounted(self):
+        with tempfile.TemporaryDirectory() as folder:
+            labels, target = Path(folder, "by-label"), Path(folder, "media")
+            labels.mkdir()
+            Path(labels, "LKG-P00000").symlink_to("/dev/sdz1")
+            Path(labels, "bootfs").symlink_to("/dev/sdy1")
+            with mock.patch("stepit_holo.calibration._mounted_devices", return_value=set()), \
+                    mock.patch("stepit_holo.calibration.subprocess.run") as run:
+                self.assertEqual(mount_drives(labels, target), [target / "LKG-P00000"])
+            run.assert_called_once()
+            self.assertEqual(run.call_args.args[0],
+                             ["mount", "-o", "ro,nosuid,nodev,noexec", "/dev/sdz1", str(target / "LKG-P00000")])
+            # Already mounted, e.g. by a desktop: left alone.
+            with mock.patch("stepit_holo.calibration._mounted_devices", return_value={"/dev/sdz1"}), \
+                    mock.patch("stepit_holo.calibration.subprocess.run") as run:
+                self.assertEqual(mount_drives(labels, target), [])
+            run.assert_not_called()
 
 
 class LayoutTest(unittest.TestCase):
@@ -127,6 +149,61 @@ class NumbersTest(unittest.TestCase):
         self.assertTrue((view_1[200:360, 150:270] == 0).all(axis=2).any())
 
 
+class DrmTest(unittest.TestCase):
+    def mode(self, width, height, refresh=60, preferred=False):
+        return drm._ModeInfo(hdisplay=width, vdisplay=height, vrefresh=refresh,
+                             type=drm.PREFERRED if preferred else 0)
+
+    def test_the_ioctls_are_the_kernels(self):
+        # DRM_IOCTL_MODE_CREATE_DUMB, MAP_DUMB and DESTROY_DUMB, as the kernel's drm.h defines them.
+        self.assertEqual((drm.CREATE_DUMB, drm.MAP_DUMB, drm.DESTROY_DUMB), (0xC02064B2, 0xC01064B3, 0xC00464B4))
+
+    def test_chooses_the_mode_of_the_looking_glass_preferred_first(self):
+        modes = [self.mode(1280, 720, 100), self.mode(1536, 2048, 60), self.mode(1536, 2048, 59, preferred=True)]
+        chosen = drm.choose_mode(modes, 1536, 2048)
+        self.assertEqual((chosen.hdisplay, chosen.vdisplay, chosen.vrefresh), (1536, 2048, 59))
+        self.assertIsNone(drm.choose_mode(modes, 2048, 1536))
+
+    def test_pixels_are_blue_green_red_in_memory(self):
+        hologram = np.zeros((2, 3, 3), np.uint8)
+        hologram[0, 0] = (10, 20, 30)
+        self.assertEqual(list(drm.xrgb(hologram)[0, 0]), [30, 20, 10, 255])
+
+    def test_says_what_it_found_when_there_is_no_screen_of_the_size(self):
+        with tempfile.TemporaryDirectory() as folder, self.assertRaisesRegex(RuntimeError, "no graphics card"):
+            drm.find_output(1536, 2048, folder)
+
+
+class ScreenChoiceTest(unittest.TestCase):
+    def choose(self, free, environment):
+        with mock.patch("stepit_holo.drm.screen_free", return_value=free), \
+                mock.patch.dict(os.environ, environment, clear=True):
+            return choose()
+
+    def test_a_screen_that_nothing_drives_is_used_whatever_display_says(self):
+        # e.g. over ssh -X, into a Raspberry Pi without a desktop.
+        self.assertEqual(self.choose(True, {"DISPLAY": "localhost:10.0"}), "drm")
+
+    def test_a_desktop_that_holds_the_screens_is_used(self):
+        self.assertEqual(self.choose(False, {"DISPLAY": ":0"}), "desktop")
+        self.assertEqual(self.choose(False, {"WAYLAND_DISPLAY": "wayland-0"}), "desktop")
+
+    def test_without_either_drm_says_what_holds_the_screens(self):
+        self.assertEqual(self.choose(False, {}), "drm")
+
+    def test_a_kind_given_is_kept(self):
+        with mock.patch("stepit_holo.drm.screen_free", side_effect=AssertionError("probed")):
+            self.assertEqual(choose("desktop"), "desktop")
+            self.assertEqual(choose("drm"), "drm")
+
+    def test_only_the_master_may_set_the_mode(self):
+        library = mock.Mock()
+        library.drmAuthMagic.return_value = -errno.EACCES
+        self.assertFalse(drm._is_master(library, 3))
+        library.drmAuthMagic.return_value = -errno.EINVAL  # The master, asked for a client that does not exist.
+        self.assertTrue(drm._is_master(library, 3))
+
+
 class CommandLineTest(unittest.TestCase):
     def run_main(self, *arguments):
         output = io.StringIO()
@@ -164,6 +241,18 @@ class CommandLineTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("width: 1536", output)
         self.assertIn("serial: LKG-PORT-00000", output)
+
+    def test_show_says_where_it_shows(self):
+        class Screen:
+            name = "fake"
+            show = staticmethod(lambda hologram: f"a screen of {hologram.shape[1]} x {hologram.shape[0]}")
+            close = staticmethod(lambda: None)
+            run = staticmethod(lambda stop: stop.wait(1))
+
+        with mock.patch("stepit_holo.cli.open_screen", return_value=Screen()):
+            code, output = self.run_main("numbers", "--calibration", str(VISUAL), "--screen", "drm")
+        self.assertEqual(code, 0)
+        self.assertIn("Showing on a screen of 1536 x 2048", output)
 
     def test_the_demo_quilt_is_a_portrait_quilt(self):
         demo = HERE.parent / "quilts" / "wasp_qs8x6a0.75.jpg"

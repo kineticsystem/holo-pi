@@ -9,14 +9,23 @@ shader derives them, in their WebXR library
 """
 
 import json
+import logging
 import math
+import os
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 # Where desktops mount a USB drive: /media/<user>/<label> on Ubuntu and
 # Raspberry Pi OS, /run/media/<user>/<label> on Fedora and Arch.
 MOUNTS = ["/media", "/run/media"]
 CALIBRATION_FILE = "LKG_calibration/visual.json"
+# Without a desktop, nothing mounts the drive: mount_drives() mounts it here, by its label, e.g. LKG-P00671.
+LABELS = "/dev/disk/by-label"
+LABEL_PREFIX = "LKG-"
+OWN_MOUNTS = "/media/stepit-holo"
 
 
 @dataclass(frozen=True)
@@ -72,3 +81,38 @@ def find_calibration(mounts=MOUNTS):
         raise RuntimeError(f"no Looking Glass found: no {places}. Is its USB cable plugged in, "
                            "with a cable that carries data?")
     return load_calibration(paths[0])
+
+
+_failures = set()
+
+
+def _mounted_devices():
+    try:
+        lines = Path("/proc/mounts").read_text().splitlines()
+    except OSError:
+        return set()
+    return {os.path.realpath(line.split()[0]) for line in lines if line.startswith("/dev/")}
+
+
+def mount_drives(labels=LABELS, target=OWN_MOUNTS):
+    """Mounts, read-only, under target/<label>, the drives of the Looking Glasses that nothing has mounted, e.g.
+    on a computer without a desktop. Needs root, e.g. in a container. Returns the folders it mounted."""
+    mounted, folders = _mounted_devices(), []
+    for link in sorted(Path(labels).glob(f"{LABEL_PREFIX}*")):
+        device = os.path.realpath(link)
+        if device in mounted:
+            continue
+        folder = Path(target, link.name)
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            subprocess.run(["mount", "-o", "ro,nosuid,nodev,noexec", device, str(folder)], check=True,
+                           capture_output=True, text=True)
+        except (OSError, subprocess.CalledProcessError) as error:
+            message = f"Cannot mount {device} on {folder}: {(getattr(error, 'stderr', '') or str(error)).strip()}"
+            if message not in _failures:  # Once, not at every retry.
+                _failures.add(message)
+                log.warning(message)
+            continue
+        log.info("Mounted %s, the drive of %s, on %s", device, link.name, folder)
+        folders.append(folder)
+    return folders
