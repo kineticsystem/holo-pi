@@ -13,6 +13,10 @@ requires-python = ">=3.11"
 # GTK's Python bindings, for the window, come from the system: python3-gi and gir1.2-gtk-3.0.
 dependencies = ["numpy", "pillow"]
 
+[project.optional-dependencies]
+# stepit-holo serve: pipx install "stepit-holo[server] @ git+https://..."
+server = ["fastapi", "uvicorn", "python-multipart"]
+
 [project.scripts]
 stepit-holo = "stepit_holo.cli:main"
 

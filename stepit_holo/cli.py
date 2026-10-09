@@ -1,12 +1,12 @@
-"""The command line: stepit-holo show | render | numbers | calibration. See README.md."""
+"""The command line: stepit-holo show | render | numbers | calibration | serve. See README.md."""
 
 import argparse
 import logging
 import sys
+import threading
 from dataclasses import asdict
 from pathlib import Path
 
-import numpy as np
 from PIL import Image
 
 from . import __version__
@@ -14,17 +14,10 @@ from .calibration import calibration_files, find_calibration, load_calibration
 from .interleave import interleave
 from .layout import Layout
 from .numbers import numbers_quilt
+from .quilt import read_quilt
+from .screen import KINDS, open_screen
 
-# A Portrait's quilt is 11 million pixels, a large one 100 million: still a quilt, not a decompression bomb.
-Image.MAX_IMAGE_PIXELS = 300_000_000
-
-
-def read_quilt(path):
-    try:
-        with Image.open(path) as image:
-            return np.asarray(image.convert("RGB"))
-    except OSError as error:
-        raise RuntimeError(f"cannot read the quilt {path}: {error}") from error
+DEFAULT_PORT = 8095
 
 
 def layout_of(path, arguments):
@@ -53,11 +46,36 @@ def save(image, path):
     print(f"Saved {path}")
 
 
-def show(hologram):
-    # GTK only when something is shown: render works without a desktop.
-    from .viewer import show as show_on_screen
+def show(hologram, kind):
+    """Shows the hologram until the window is closed, or the process is interrupted or terminated. Returns 0 if
+    it was shown, 1 if not."""
+    screen = open_screen(kind)
+    stop, shown = threading.Event(), threading.Event()
 
-    return show_on_screen(hologram)
+    def put_on_screen():
+        try:
+            print(f"Showing on {screen.show(hologram)}", flush=True)
+            shown.set()
+        except RuntimeError as error:
+            print(f"stepit-holo: {error}", file=sys.stderr, flush=True)
+            stop.set()
+
+    # The screen's loop runs on the main thread, GTK's for a desktop: show() waits for it from another one.
+    threading.Thread(target=put_on_screen, daemon=True).start()
+    try:
+        screen.run(stop)
+    finally:
+        screen.close()
+    return 0 if shown.is_set() else 1
+
+
+def serve(arguments):
+    try:
+        from .server import serve as run_server
+    except ImportError as error:
+        raise RuntimeError(f"the server needs FastAPI, uvicorn and python-multipart: {error}") from error
+    return run_server(host=arguments.host, port=arguments.port, screen=arguments.screen,
+                      calibration=arguments.calibration, state=arguments.state, mount=arguments.mount_drive)
 
 
 def main(argv=None):
@@ -75,19 +93,41 @@ def main(argv=None):
         command.add_argument("--reverse", action="store_true",
                              help="the views in the other order, if the depth looks inside out")
 
-    common(commands.add_parser("show", help="show a quilt on the Looking Glass, until Escape or q"))
+    def screen(command):
+        command.add_argument("--screen", choices=KINDS, default="auto",
+                             help="a desktop's monitor, or the screen itself through DRM/KMS without a desktop; "
+                                  "auto: the screen itself if nothing drives it, the desktop otherwise")
+
+    show_command = commands.add_parser("show", help="show a quilt on the Looking Glass, until Escape or q")
+    common(show_command)
+    screen(show_command)
     render = commands.add_parser("render", help="save the hologram of a quilt as an image, without showing it")
     common(render)
     render.add_argument("-o", "--output", type=Path, required=True, help="the hologram, e.g. hologram.png")
     numbers = commands.add_parser("numbers", help="show a test quilt of numbered views, 1 to 48")
     common(numbers, quilt=False)
     numbers.add_argument("--quilt-output", type=Path, help="save the test quilt itself, and show nothing")
+    screen(numbers)
+    server = commands.add_parser("serve", help="show the quilts that other computers upload, over HTTP")
+    server.add_argument("--host", default="0.0.0.0", help="the address to listen on; default: every one")
+    server.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"default: {DEFAULT_PORT}")
+    server.add_argument("--calibration", type=Path,
+                        help="a visual.json, instead of the one on the Looking Glass's drive")
+    server.add_argument("--state", type=Path,
+                        help="where to keep the last quilt, to show it again after a restart; "
+                             "default: ~/.local/state/stepit-holo")
+    server.add_argument("--mount-drive", action="store_true",
+                        help="mount the Looking Glass's drive, read-only, if nothing has, e.g. without a desktop; "
+                             "needs root")
+    screen(server)
     calibration = commands.add_parser("calibration", help="print the Looking Glass's calibration")
     calibration.add_argument("--calibration", type=Path, help="a visual.json, instead of the one found")
 
     arguments = parser.parse_args(argv)
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(message)s")
     try:
+        if arguments.command == "serve":
+            return serve(arguments)
         if arguments.command == "calibration":
             if not arguments.calibration:
                 for path in calibration_files():
@@ -102,7 +142,7 @@ def main(argv=None):
         if arguments.command == "render":
             save(hologram, arguments.output)
             return 0
-        return show(hologram)
+        return show(hologram, arguments.screen)
     except (RuntimeError, ValueError) as error:
         print(f"stepit-holo: {error}", file=sys.stderr)
         return 1

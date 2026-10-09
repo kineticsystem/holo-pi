@@ -1,0 +1,54 @@
+# StepIt Holo's server, in one container, stepit-holo: it shows on the Looking
+# Glass the quilts that other computers upload, on port 8095. Driven by
+# ./dock.sh.
+#
+# It shows through DRM/KMS, straight to the screen, so it needs a computer
+# where no desktop drives the screens, e.g. a Raspberry Pi with Raspberry Pi
+# OS Lite. It runs as root, which DRM/KMS and mounting the Looking Glass's
+# drive need.
+
+name: stepit-holo
+
+services:
+  stepit-holo:
+    build: .
+    image: stepit-holo:latest
+    container_name: stepit-holo
+    hostname: stepit-holo
+    init: true
+    # The server starts with the computer, once it has been started with
+    # dock.sh: Docker starts it again at boot, until dock.sh stop stops it.
+    restart: unless-stopped
+    # The devices: the screens, through /dev/dri, and the Looking Glass's
+    # drive, through /dev/disk/by-label, which the server mounts read-only, in
+    # the container only. Mounting the whole of /dev, rather than each device,
+    # lets the Looking Glass be unplugged and plugged in again while the server
+    # runs. Privileged also allows the mount.
+    privileged: true
+    # The server listens on the host's port, 8095.
+    network_mode: host
+    volumes:
+      - ..:/stepit-holo:ro
+      - /dev:/dev
+      # The host's mounted drives, where a desktop mounts the Looking Glass's,
+      # e.g. /media/<user>/LKG-P00671, as /run/media/<user>/LKG-P00671, where
+      # the server looks too. rslave: a drive mounted later shows there too.
+      - /media:/run/media:ro,rslave
+      # The last quilt, shown again after a restart, and the tables.
+      - state:/var/lib/stepit-holo
+    command:
+      - python3
+      - -m
+      - stepit_holo
+      - serve
+      - --screen
+      - drm
+      - --state
+      - /var/lib/stepit-holo
+      # Nothing else mounts the Looking Glass's drive in the container.
+      - --mount-drive
+      - --port
+      - "${STEPIT_HOLO_PORT:-8095}"
+
+volumes:
+  state:
