@@ -322,7 +322,7 @@ git pull
 ./docker/dock.sh stop && ./docker/dock.sh start
 ```
 
-With no quilt kept, the container shows the sample wasp, [`quilts/wasp_qs8x6a0.75.jpg`](quilts/wasp_qs8x6a0.75.jpg). `STEPIT_HOLO_DEFAULT_QUILT=numbers ./docker/dock.sh start` shows the test quilt instead, or any quilt of the repo by its path.
+With no quilt kept, the container shows the test quilt of numbered views, which also checks the Looking Glass at every start. `STEPIT_HOLO_DEFAULT_QUILT=quilts/wasp_qs8x6a0.75.jpg ./docker/dock.sh start` shows the sample wasp instead, or any quilt of the repo by its path.
 
 The container is privileged and runs as root, which setting the screen's mode and mounting the drive need; it mounts the host's `/dev`, so that the Looking Glass can be unplugged and plugged in again, and listens on the host's network, on port 8095, or `STEPIT_HOLO_PORT`. Its volume, `stepit-holo_state`, keeps the last quilt and the tables of the interleaving.
 

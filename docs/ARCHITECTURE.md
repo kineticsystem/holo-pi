@@ -253,7 +253,7 @@ An upload is checked first: an image, of a layout from its name or its fields; o
 | `/dev` of the host | The cards and the drive, which come back under new names when the Looking Glass is unplugged and plugged in again. |
 | `/media` of the host, read-only, as `/run/media` | A drive the host has mounted, e.g. by a desktop, is found there; the container could not mount it again. |
 | The volume `stepit-holo_state`, on `/var/lib/stepit-holo` | The last quilt and the tables survive a restart and a new image. |
-| `--default-quilt`, the sample wasp, or `STEPIT_HOLO_DEFAULT_QUILT` | Something on the Looking Glass from the first start, rather than the console. |
+| `--default-quilt`, the test quilt, or `STEPIT_HOLO_DEFAULT_QUILT` | Something on the Looking Glass from the first start, rather than the console. |
 | `network_mode: host`, `restart: unless-stopped` | The server on the host's port 8095, started with the computer. |
 
 ## The Test Quilt

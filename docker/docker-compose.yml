@@ -47,10 +47,10 @@ services:
       - /var/lib/stepit-holo
       # Nothing else mounts the Looking Glass's drive in the container.
       - --mount-drive
-      # Shown when no quilt is kept, e.g. at the first start: the sample quilt,
-      # from the mounted repo, or numbers, the test quilt.
+      # Shown when no quilt is kept, e.g. at the first start: numbers, the test
+      # quilt, or a quilt of the mounted repo, e.g. quilts/wasp_qs8x6a0.75.jpg.
       - --default-quilt
-      - "${STEPIT_HOLO_DEFAULT_QUILT:-quilts/wasp_qs8x6a0.75.jpg}"
+      - "${STEPIT_HOLO_DEFAULT_QUILT:-numbers}"
       - --port
       - "${STEPIT_HOLO_PORT:-8095}"
 
