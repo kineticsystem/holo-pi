@@ -25,7 +25,7 @@ CALIBRATION_FILE = "LKG_calibration/visual.json"
 # Without a desktop, nothing mounts the drive: mount_drives() mounts it here, by its label, e.g. LKG-P00671.
 LABELS = "/dev/disk/by-label"
 LABEL_PREFIX = "LKG-"
-OWN_MOUNTS = "/media/stepit-holo"
+OWN_MOUNTS = "/media/holo-pi"
 
 
 @dataclass(frozen=True)

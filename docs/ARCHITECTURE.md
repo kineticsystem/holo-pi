@@ -1,4 +1,4 @@
-# StepIt Holo Architecture
+# HoloPi Architecture
 
 ## Table of Contents <!-- omit in toc -->
 
@@ -16,16 +16,16 @@
   - [The Container](#the-container)
 - [The Test Quilt](#the-test-quilt)
 - [Tests](#tests)
-- [How to Extend StepIt Holo](#how-to-extend-stepit-holo)
+- [How to Extend HoloPi](#how-to-extend-holopi)
 - [Design Decisions and Trade-offs](#design-decisions-and-trade-offs)
 
 ## Introduction
 
-This document explains how StepIt Holo is built, what each part is responsible for, and where to start when we want to change something. It assumes we have read the [README](../README.md).
+This document explains how HoloPi is built, what each part is responsible for, and where to start when we want to change something. It assumes we have read the [README](../README.md).
 
-StepIt Holo is made for the Looking Glass Portrait, and tested with it only; [How to Extend StepIt Holo](#how-to-extend-stepit-holo) says what another model may need.
+HoloPi is made for the Looking Glass Portrait, and tested with it only; [How to Extend HoloPi](#how-to-extend-holopi) says what another model may need.
 
-It follows one idea: **the display knows how it must be drawn**. Every Looking Glass carries its calibration on its own drive, and the formula that turns a quilt into the image its screen shows is a few lines of published math. StepIt Holo needs nothing else from Looking Glass: no service, no driver, no account.
+It follows one idea: **the display knows how it must be drawn**. Every Looking Glass carries its calibration on its own drive, and the formula that turns a quilt into the image its screen shows is a few lines of published math. HoloPi needs nothing else from Looking Glass: no service, no driver, no account.
 
 ## The Big Picture
 
@@ -90,12 +90,12 @@ flowchart TB
     Quilt["Quilt<br/>e.g. wasp_qs8x6a0.75.jpg"]
     Client["Another computer<br/>curl, a script"]
     Drive["Looking Glass's USB drive<br/>LKG_calibration/visual.json"]
-    subgraph Holo["stepit-holo"]
+    subgraph Holo["holo-pi"]
         CLI["cli.py<br/>show, numbers, render"]
         Server["server.py<br/>FastAPI, port 8095"]
         Calibration["calibration.py<br/>pitch, tilt, center"]
         Interleaver["interleave.py<br/>Interleaver, its table"]
-        Cache["~/.cache/stepit-holo<br/>the tables"]
+        Cache["~/.cache/holo-pi<br/>the tables"]
         Viewer["viewer.py<br/>full-screen GTK window"]
         DRM["drm.py<br/>DRM/KMS, no desktop"]
     end
@@ -115,7 +115,7 @@ flowchart TB
     classDef default fill:#3b6fb6,stroke:#2c5590,color:#ffffff
 ```
 
-What StepIt Holo uses of the system:
+What HoloPi uses of the system:
 
 | Name | Type | What it is |
 |---|---|---|
@@ -123,33 +123,33 @@ What StepIt Holo uses of the system:
 | `/dev/disk/by-label/LKG-*` | block device | The display's drive, which the server mounts itself with `--mount-drive`, as root, when nothing has, e.g. in its container. |
 | The monitor of the calibration's size | GTK monitor | The Looking Glass, e.g. 1536 x 2048, part of the desktop at 100%. |
 | `/dev/dri/card*` | DRM device | The graphics cards, whose connected screen of the hologram's size is the Looking Glass, without a desktop. |
-| `~/.cache/stepit-holo`, or `$XDG_CACHE_HOME/stepit-holo` | folder | The tables of the interleaving, about 38 MB each for a Portrait. |
-| `~/.local/state/stepit-holo`, or `--state` | folder | The server's last quilt, `quilt.<suffix>` and `quilt.json`, to show it again after a restart. |
+| `~/.cache/holo-pi`, or `$XDG_CACHE_HOME/holo-pi` | folder | The tables of the interleaving, about 38 MB each for a Portrait. |
+| `~/.local/state/holo-pi`, or `--state` | folder | The server's last quilt, `quilt.<suffix>` and `quilt.json`, to show it again after a restart. |
 | Port 8095 | HTTP | The server's API, see [API.md](API.md). |
 
 ## The Parts
 
 | File | Responsibility |
 |---|---|
-| [`stepit_holo/calibration.py`](../stepit_holo/calibration.py) | Finds and reads `visual.json`, and derives the values the interleaving needs. |
-| [`stepit_holo/layout.py`](../stepit_holo/layout.py) | A quilt's layout, and reading it from a file's name, e.g. `_qs8x6a0.75`. |
-| [`stepit_holo/interleave.py`](../stepit_holo/interleave.py) | The interleaving: the table, its cache, and the lookup. |
-| [`stepit_holo/quilt.py`](../stepit_holo/quilt.py) | Reads a quilt's picture, from a file or from the bytes of an upload. |
-| [`stepit_holo/screen.py`](../stepit_holo/screen.py) | Chooses the screen: the desktop if one runs, DRM/KMS otherwise. |
-| [`stepit_holo/viewer.py`](../stepit_holo/viewer.py) | The desktop's screen: the full-screen window on the Looking Glass. |
-| [`stepit_holo/x11.py`](../stepit_holo/x11.py) | Full-screen on a given monitor under X11, through libX11 and ctypes. |
-| [`stepit_holo/drm.py`](../stepit_holo/drm.py) | The screen without a desktop: DRM/KMS, through libdrm and ctypes. |
-| [`stepit_holo/server.py`](../stepit_holo/server.py) | The server: the quilt shown, kept on disk, and the FastAPI routes. |
-| [`stepit_holo/numbers.py`](../stepit_holo/numbers.py) | The test quilt of numbered views. |
-| [`stepit_holo/cli.py`](../stepit_holo/cli.py) | The command line: `show`, `render`, `numbers`, `calibration`, `serve`. |
-| [`stepit-holo`](../stepit-holo) | The command, from a checkout, without installing it. |
+| [`holo_pi/calibration.py`](../holo_pi/calibration.py) | Finds and reads `visual.json`, and derives the values the interleaving needs. |
+| [`holo_pi/layout.py`](../holo_pi/layout.py) | A quilt's layout, and reading it from a file's name, e.g. `_qs8x6a0.75`. |
+| [`holo_pi/interleave.py`](../holo_pi/interleave.py) | The interleaving: the table, its cache, and the lookup. |
+| [`holo_pi/quilt.py`](../holo_pi/quilt.py) | Reads a quilt's picture, from a file or from the bytes of an upload. |
+| [`holo_pi/screen.py`](../holo_pi/screen.py) | Chooses the screen: the desktop if one runs, DRM/KMS otherwise. |
+| [`holo_pi/viewer.py`](../holo_pi/viewer.py) | The desktop's screen: the full-screen window on the Looking Glass. |
+| [`holo_pi/x11.py`](../holo_pi/x11.py) | Full-screen on a given monitor under X11, through libX11 and ctypes. |
+| [`holo_pi/drm.py`](../holo_pi/drm.py) | The screen without a desktop: DRM/KMS, through libdrm and ctypes. |
+| [`holo_pi/server.py`](../holo_pi/server.py) | The server: the quilt shown, kept on disk, and the FastAPI routes. |
+| [`holo_pi/numbers.py`](../holo_pi/numbers.py) | The test quilt of numbered views. |
+| [`holo_pi/cli.py`](../holo_pi/cli.py) | The command line: `show`, `render`, `numbers`, `calibration`, `serve`. |
+| [`holo-pi`](../holo-pi) | The command, from a checkout, without installing it. |
 | [`docker/`](../docker) | The server's container: its image, its compose file and `dock.sh`. |
 
 Each part is loaded only when it is used: GTK only to show on a desktop, libdrm only to show without one, FastAPI only to serve. `render`, `calibration` and the library work without any of them, e.g. over ssh.
 
 ## The Calibration
 
-`visual.json` holds, among others, the screen's size, `screenW` and `screenH`, its density, `DPI`, and the lenses: how many per inch, `pitch`, their slant, `slope`, and where the views start under them, `center`. Each value is a number or `{"value": number}`. [`calibration.py`](../stepit_holo/calibration.py) derives what the interleaving needs, as Looking Glass's lenticular shader does in their [WebXR library](https://github.com/Looking-Glass/looking-glass-webxr):
+`visual.json` holds, among others, the screen's size, `screenW` and `screenH`, its density, `DPI`, and the lenses: how many per inch, `pitch`, their slant, `slope`, and where the views start under them, `center`. Each value is a number or `{"value": number}`. [`calibration.py`](../holo_pi/calibration.py) derives what the interleaving needs, as Looking Glass's lenticular shader does in their [WebXR library](https://github.com/Looking-Glass/looking-glass-webxr):
 
 | Value | From `visual.json` | What it is |
 |---|---|---|
@@ -181,7 +181,7 @@ Which sub-pixel of the quilt each sub-pixel of the screen takes depends only on 
 | A quilt, with the table | about 15 ms |
 | Reading a 3360 x 3360 PNG quilt | about 210 ms |
 
-The table is saved in `~/.cache/stepit-holo`, named after a hash of everything it depends on, including `TABLE_VERSION`, so a restart, or a Raspberry Pi, where everything is several times slower, skips it. A table that cannot be read is computed again; one that cannot be saved is only logged.
+The table is saved in `~/.cache/holo-pi`, named after a hash of everything it depends on, including `TABLE_VERSION`, so a restart, or a Raspberry Pi, where everything is several times slower, skips it. A table that cannot be read is computed again; one that cannot be saved is only logged.
 
 ## The Screens
 
@@ -194,7 +194,7 @@ A screen shows a hologram on the Looking Glass. There are two, with the same met
 | `run(stop)` | Runs on the main thread until the `threading.Event` `stop` is set, or `SIGINT` or `SIGTERM` arrives: GTK's loop on a desktop, a wait without one. |
 | `close()` | Gives the screen back. |
 
-[`screen.py`](../stepit_holo/screen.py) opens the one `--screen` names, or chooses with `choose()`, from what the computer offers rather than from the environment:
+[`screen.py`](../holo_pi/screen.py) opens the one `--screen` names, or chooses with `choose()`, from what the computer offers rather than from the environment:
 
 1. **DRM/KMS when a card has a connected screen that no other program drives.** `screen_free()` of `drm.py` opens each card: a process that opens a card without a master becomes its master, and `drmIsMaster()`, which libdrm answers by asking to authenticate a client, something only the master may do, says so. This holds on a computer without a desktop, even over `ssh -X`, whose `DISPLAY` would point at another computer's desktop.
 2. **The desktop when `DISPLAY` or `WAYLAND_DISPLAY` is set:** a desktop holds the screens, as GNOME does.
@@ -204,7 +204,7 @@ The probe holds the card only while it looks, and closes it. The command line sh
 
 ### The Desktop
 
-[`viewer.py`](../stepit_holo/viewer.py) shows the hologram in a GTK window, full-screen on the monitor of the hologram's size. One pixel off, and the hologram is drawn for the wrong lenses, so the window must cover that monitor exactly, at 100%: the viewer sets `GDK_SCALE=1` before GTK loads, whatever the desktop's scaling. Under X11, a whole factor, e.g. 200% on a 4K desktop, is applied by each program, and the screen keeps its pixels: the window still covers the Looking Glass pixel for pixel, checked on a Portrait at 200%. A fractional factor is not: GNOME scales the whole screen image, and no window can be pixel-exact. It hides the pointer.
+[`viewer.py`](../holo_pi/viewer.py) shows the hologram in a GTK window, full-screen on the monitor of the hologram's size. One pixel off, and the hologram is drawn for the wrong lenses, so the window must cover that monitor exactly, at 100%: the viewer sets `GDK_SCALE=1` before GTK loads, whatever the desktop's scaling. Under X11, a whole factor, e.g. 200% on a 4K desktop, is applied by each program, and the screen keeps its pixels: the window still covers the Looking Glass pixel for pixel, checked on a Portrait at 200%. A fractional factor is not: GNOME scales the whole screen image, and no window can be pixel-exact. It hides the pointer.
 
 GTK must run on the main thread, so `show()` hands the hologram to GTK's loop with `GLib.idle_add()`, and waits until the window covers the Looking Glass, at most 10 seconds. The window covers it once it is full-screen, of the screen's size, and, under X11, at the monitor's position. A new hologram on the same monitor only replaces the window's picture. Escape, `q` or closing the window ends the command; for the server, it only closes the window, until the next quilt.
 
@@ -212,12 +212,12 @@ GTK must run on the main thread, so `show()` hands the hologram to GTK's loop wi
 
 **Under Wayland,** Raspberry Pi OS's default and Ubuntu's, GTK asks the compositor for full-screen on the Looking Glass's monitor, `fullscreen_on_monitor()`, and the compositor does it. A Wayland client cannot know where its window is, so the viewer checks only that it is full-screen and of the screen's size.
 
-**Under X11,** GNOME's window manager places a new window on the main monitor, and ignores both a request to move it and `fullscreen_on_monitor()`. It does make a window full-screen on a given monitor when asked as a pager would be, with the EWMH messages `_NET_WM_FULLSCREEN_MONITORS` and `_NET_WM_STATE` from source 2. [`x11.py`](../stepit_holo/x11.py) sends them with libX11 and libXinerama through ctypes, on top of GTK's own request.
+**Under X11,** GNOME's window manager places a new window on the main monitor, and ignores both a request to move it and `fullscreen_on_monitor()`. It does make a window full-screen on a given monitor when asked as a pager would be, with the EWMH messages `_NET_WM_FULLSCREEN_MONITORS` and `_NET_WM_STATE` from source 2. [`x11.py`](../holo_pi/x11.py) sends them with libX11 and libXinerama through ctypes, on top of GTK's own request.
 
 
 ### DRM/KMS
 
-[`drm.py`](../stepit_holo/drm.py) shows the hologram without a desktop, the way a desktop shows itself: through DRM/KMS, the kernel's interface to the graphics cards. On a computer where no desktop runs, the first program to open a card is its master, and may set the mode of its screens. It calls libdrm through ctypes, as `x11.py` calls libX11:
+[`drm.py`](../holo_pi/drm.py) shows the hologram without a desktop, the way a desktop shows itself: through DRM/KMS, the kernel's interface to the graphics cards. On a computer where no desktop runs, the first program to open a card is its master, and may set the mode of its screens. It calls libdrm through ctypes, as `x11.py` calls libX11:
 
 1. It opens each `/dev/dri/card*`, and lists its connected screens and their modes. A card without screens, e.g. the Raspberry Pi 5's `v3d`, which only renders, has none.
 2. The Looking Glass is the screen with a mode of the hologram's size, 1536 x 2048 for a Portrait, its preferred mode: the one the screen asks for first, then the highest refresh.
@@ -230,11 +230,11 @@ The easy detail to break is the row length: a buffer's rows are `pitch` bytes ap
 
 ## The Server
 
-[`server.py`](../stepit_holo/server.py) is `stepit-holo serve`: FastAPI routes, documented in [API.md](API.md), on uvicorn, which runs on a thread of its own, while the main thread runs the screen. It shows one quilt at a time, the last one uploaded.
+[`server.py`](../holo_pi/server.py) is `holo-pi serve`: FastAPI routes, documented in [API.md](API.md), on uvicorn, which runs on a thread of its own, while the main thread runs the screen. It shows one quilt at a time, the last one uploaded.
 
 `Display` holds what is shown, behind one lock, so that two uploads at once are shown one after the other:
 
-- **The calibration,** read at the first quilt, then kept. When the drive is not mounted and the server was started with `--mount-drive`, it mounts it itself, read-only, as root, by its label, `/dev/disk/by-label/LKG-*`, under `/media/stepit-holo`, with `mount_drives()` of [`calibration.py`](../stepit_holo/calibration.py).
+- **The calibration,** read at the first quilt, then kept. When the drive is not mounted and the server was started with `--mount-drive`, it mounts it itself, read-only, as root, by its label, `/dev/disk/by-label/LKG-*`, under `/media/holo-pi`, with `mount_drives()` of [`calibration.py`](../holo_pi/calibration.py).
 - **The tables** of the last two layouts and sizes of quilt, in memory, about 38 MB each: a quilt of the same layout is a lookup.
 - **The quilt,** its picture, and a copy of the uploaded file in the state folder, with `quilt.json`, which says its name, layout and order. At start, `restore()` takes it back, or, when none is kept, the default quilt of `--default-quilt`, which is shown and not kept: an upload replaces it, and the next start shows it again.
 - **Whether it is shown,** where, or why not.
@@ -243,22 +243,22 @@ An upload is checked first: an image, of a layout from its name or its fields; o
 
 ### The Container
 
-[`docker/`](../docker) runs the server in a container, `stepit-holo`, on a computer without a desktop, driven by [`dock.sh`](../docker/dock.sh):
+[`docker/`](../docker) runs the server in a container, `holo-pi`, on a computer without a desktop, driven by [`dock.sh`](../docker/dock.sh):
 
 | What | Why |
 |---|---|
 | `debian:trixie-slim`, with Debian's packages of Python, numpy, Pillow, FastAPI, uvicorn, python-multipart and libdrm | Built for amd64 and arm64: the image installs packages, with nothing to compile, also on a Raspberry Pi. |
-| The repo, mounted read-only on `/stepit-holo` | The image holds no code: a `git pull` and a restart update the server. |
+| The repo, mounted read-only on `/holo-pi` | The image holds no code: a `git pull` and a restart update the server. |
 | `privileged`, as root, with `--mount-drive` | Setting a screen's mode, and mounting the Looking Glass's drive, need it; nothing else mounts the drive in the container. |
 | `/dev` of the host | The cards and the drive, which come back under new names when the Looking Glass is unplugged and plugged in again. |
 | `/media` of the host, read-only, as `/run/media` | A drive the host has mounted, e.g. by a desktop, is found there; the container could not mount it again. |
-| The volume `stepit-holo_state`, on `/var/lib/stepit-holo` | The last quilt and the tables survive a restart and a new image. |
-| `--default-quilt`, the test quilt, or `STEPIT_HOLO_DEFAULT_QUILT` | Something on the Looking Glass from the first start, rather than the console. |
+| The volume `holo-pi_state`, on `/var/lib/holo-pi` | The last quilt and the tables survive a restart and a new image. |
+| `--default-quilt`, the test quilt, or `HOLO_PI_DEFAULT_QUILT` | Something on the Looking Glass from the first start, rather than the console. |
 | `network_mode: host`, `restart: unless-stopped` | The server on the host's port 8095, started with the computer. |
 
 ## The Test Quilt
 
-[`numbers.py`](../stepit_holo/numbers.py) makes a Portrait's quilt of 48 views, each showing its number on a colour of its own, the hues around the colour wheel. Through the lenses of a display that interleaves right, one number fills the screen, and changes in order as the viewer moves. If the interleaving is wrong, every direction mixes many views, and the colours average to a white blur. The digits are drawn as seven segments with numpy: no font, so the test quilt is the same with every Pillow.
+[`numbers.py`](../holo_pi/numbers.py) makes a Portrait's quilt of 48 views, each showing its number on a colour of its own, the hues around the colour wheel. Through the lenses of a display that interleaves right, one number fills the screen, and changes in order as the viewer moves. If the interleaving is wrong, every direction mixes many views, and the colours average to a white blur. The digits are drawn as seven segments with numpy: no font, so the test quilt is the same with every Pillow.
 
 ## Tests
 
@@ -281,15 +281,15 @@ Checked by hand:
 
 | Part | How to check it |
 |---|---|
-| The desktop | `stepit-holo numbers`: one number through the lenses, changing in order. On a desktop with another monitor, the window must go to the Looking Glass, not the main monitor. |
-| DRM/KMS | `stepit-holo numbers --screen drm` on a computer without a desktop: the same, and the console back after Ctrl+C. |
-| The server | `stepit-holo serve`, then `curl -F file=@quilts/wasp_qs8x6a0.75.jpg http://localhost:8095/quilt`; unplug the Looking Glass's HDMI, upload again, plug it in: the quilt shows within 5 seconds. |
+| The desktop | `holo-pi numbers`: one number through the lenses, changing in order. On a desktop with another monitor, the window must go to the Looking Glass, not the main monitor. |
+| DRM/KMS | `holo-pi numbers --screen drm` on a computer without a desktop: the same, and the console back after Ctrl+C. |
+| The server | `holo-pi serve`, then `curl -F file=@quilts/wasp_qs8x6a0.75.jpg http://localhost:8095/quilt`; unplug the Looking Glass's HDMI, upload again, plug it in: the quilt shows within 5 seconds. |
 | The container | `./docker/dock.sh start` on a Raspberry Pi without a desktop, an upload from another computer, then a reboot of the Pi: the same quilt comes back. |
-| The interleaving | `stepit-holo show` with a quilt that looks right with Looking Glass's own software on another computer. |
+| The interleaving | `holo-pi show` with a quilt that looks right with Looking Glass's own software on another computer. |
 
-## How to Extend StepIt Holo
+## How to Extend HoloPi
 
-**Support another Looking Glass model.** Check it with `stepit-holo numbers`. If the numbers mix, compare its `visual.json` with a Portrait's: a value the Portrait does not have, e.g. `subpixelCells`, which describes sub-pixels laid out differently, belongs in `Calibration` and in `table()`, and `TABLE_VERSION` goes up.
+**Support another Looking Glass model.** Check it with `holo-pi numbers`. If the numbers mix, compare its `visual.json` with a Portrait's: a value the Portrait does not have, e.g. `subpixelCells`, which describes sub-pixels laid out differently, belongs in `Calibration` and in `table()`, and `TABLE_VERSION` goes up.
 
 **Add a route to the server.** Add it in `create_app()`, with a `summary`, a docstring, which becomes its description, and a response model whose fields have a `description`: `test_documents_every_route` checks the first two. Anything that changes what is shown goes through `Display`, under its lock. Add it to [API.md](API.md).
 

@@ -1,13 +1,13 @@
 #! /bin/bash -e
 
-# Use this script to build, start, stop and remove StepIt Holo's server, in
-# one container, stepit-holo, on a computer without a desktop, e.g. a
+# Use this script to build, start, stop and remove HoloPi's server, in
+# one container, holo-pi, on a computer without a desktop, e.g. a
 # Raspberry Pi with Raspberry Pi OS Lite. Its compose project is its own,
-# stepit-holo: it does not touch the other containers of the computer.
+# holo-pi: it does not touch the other containers of the computer.
 #
 # The container is defined in docker-compose.yml.
 
-SERVICE=stepit-holo
+SERVICE=holo-pi
 
 function display_usage() {
     echo -e "\nUsage: ./docker/dock.sh <command>\n
@@ -33,7 +33,7 @@ if [ "$#" -lt 1 ]; then
 fi
 
 command="$1"
-port=${STEPIT_HOLO_PORT:-8095}
+port=${HOLO_PI_PORT:-8095}
 
 case "$command" in
     build)
@@ -42,7 +42,7 @@ case "$command" in
         ;;
     start)
         docker compose up --detach
-        echo -e "\nStepIt Holo is on http://$(hostname -I | awk '{print $1}'):$port"
+        echo -e "\nHoloPi is on http://$(hostname -I | awk '{print $1}'):$port"
         echo "Its API is documented on http://$(hostname -I | awk '{print $1}'):$port/docs"
         echo "Follow the output with ./docker/dock.sh logs"
         ;;

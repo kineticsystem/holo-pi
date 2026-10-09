@@ -13,11 +13,11 @@ from PIL import Image
 try:
     from fastapi.testclient import TestClient
 
-    from stepit_holo.server import Display, create_app
+    from holo_pi.server import Display, create_app
 except ImportError as error:  # The server's packages are optional.
     raise unittest.SkipTest(f"no server packages: {error}")
 
-from test_stepit_holo import VISUAL, numbered_quilt
+from test_holo_pi import VISUAL, numbered_quilt
 
 
 class FakeScreen:
@@ -139,7 +139,7 @@ class ServerTest(unittest.TestCase):
     def test_a_default_without_a_layout_shows_nothing(self):
         quilt = self.state / "default.png"
         quilt.write_bytes(self.quilt)
-        with self.assertLogs("stepit_holo.server", "WARNING"):
+        with self.assertLogs("holo_pi.server", "WARNING"):
             screen, display = self.restart(str(quilt))
         self.assertIsNone(display.quilt_status())
         self.assertIsNone(screen.shown)
@@ -183,8 +183,8 @@ class ServerTest(unittest.TestCase):
         for mount, calls in [(False, 0), (True, 1)]:
             display = Display(FakeScreen(), state=self.state, mount=mount)
             missing = RuntimeError("no Looking Glass found")
-            with mock.patch("stepit_holo.server.find_calibration", side_effect=missing), \
-                    mock.patch("stepit_holo.server.mount_drives", return_value=[]) as mount_drives, \
+            with mock.patch("holo_pi.server.find_calibration", side_effect=missing), \
+                    mock.patch("holo_pi.server.mount_drives", return_value=[]) as mount_drives, \
                     self.assertRaisesRegex(RuntimeError, "no Looking Glass found"):
                 display.calibration()
             self.assertEqual(mount_drives.call_count, calls)

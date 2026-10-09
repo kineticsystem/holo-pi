@@ -1,4 +1,4 @@
-"""The command line: stepit-holo show | render | numbers | calibration | serve. See README.md."""
+"""The command line: holo-pi show | render | numbers | calibration | serve. See README.md."""
 
 import argparse
 import logging
@@ -57,7 +57,7 @@ def show(hologram, kind):
             print(f"Showing on {screen.show(hologram)}", flush=True)
             shown.set()
         except RuntimeError as error:
-            print(f"stepit-holo: {error}", file=sys.stderr, flush=True)
+            print(f"holo-pi: {error}", file=sys.stderr, flush=True)
             stop.set()
 
     # The screen's loop runs on the main thread, GTK's for a desktop: show() waits for it from another one.
@@ -80,7 +80,7 @@ def serve(arguments):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="stepit-holo", description="Show quilts on a Looking Glass Portrait, as holograms.")
+    parser = argparse.ArgumentParser(prog="holo-pi", description="Show quilts on a Looking Glass Portrait, as holograms.")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -116,7 +116,7 @@ def main(argv=None):
                         help="a visual.json, instead of the one on the Looking Glass's drive")
     server.add_argument("--state", type=Path,
                         help="where to keep the last quilt, to show it again after a restart; "
-                             "default: ~/.local/state/stepit-holo")
+                             "default: ~/.local/state/holo-pi")
     server.add_argument("--default-quilt", metavar="QUILT",
                         help="what to show when no quilt is kept, e.g. at the first start: numbers, the test "
                              "quilt, or a quilt file whose name gives its layout, e.g. quilts/wasp_qs8x6a0.75.jpg")
@@ -148,5 +148,5 @@ def main(argv=None):
             return 0
         return show(hologram, arguments.screen)
     except (RuntimeError, ValueError) as error:
-        print(f"stepit-holo: {error}", file=sys.stderr)
+        print(f"holo-pi: {error}", file=sys.stderr)
         return 1

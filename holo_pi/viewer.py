@@ -124,7 +124,7 @@ class DesktopScreen:
     def _open_window(self, pixbuf, number, geometry, key, done, result):
         width, height = key[2], key[3]
         x11 = type(self.display).__name__ == "X11Display"
-        window = Gtk.Window(title="stepit-holo")
+        window = Gtk.Window(title="holo-pi")
         image = Gtk.Image.new_from_pixbuf(pixbuf)
         window.add(image)
         window.connect("delete-event", lambda *_: self._closed_by_user() or True)
