@@ -1,0 +1,97 @@
+---
+config:
+  theme: base
+  fontFamily: "Arial, Helvetica, sans-serif"
+  flowchart:
+    curve: basis
+    padding: 12
+    nodeSpacing: 46
+    rankSpacing: 32
+    subGraphTitleMargin:
+      top: 4
+      bottom: 10
+  class:
+    padding: 10
+  themeVariables:
+    lineColor: "#94a3b8"
+    textColor: "#64748b"
+    primaryColor: "#f1f5f9"
+    primaryBorderColor: "#64748b"
+    primaryTextColor: "#0f172a"
+    secondaryColor: "#f1f5f9"
+    secondaryBorderColor: "#64748b"
+    secondaryTextColor: "#0f172a"
+    tertiaryColor: "#f1f5f9"
+    tertiaryBorderColor: "#64748b"
+    tertiaryTextColor: "#0f172a"
+    mainBkg: "#f1f5f9"
+    nodeBorder: "#64748b"
+    nodeTextColor: "#0f172a"
+    classText: "#0f172a"
+    clusterBkg: "transparent"
+    clusterBorder: "#94a3b8"
+    titleColor: "#64748b"
+    edgeLabelBackground: "#ffffff"
+  themeCSS: >
+    svg, .label, .nodeLabel, .edgeLabel, foreignObject div { font-family: Arial, Helvetica, sans-serif; }
+    .node rect, .node polygon, .node path {
+      filter: drop-shadow(0 3px 6px rgba(15, 23, 42, 0.18));
+    }
+    .node rect { rx: 14px; ry: 14px; }
+    .cluster rect { rx: 18px; ry: 18px; }
+    .edgeLabel, .edgeLabel p, .edgeLabel span {
+      background: #ffffff; color: #475569; border-radius: 999px;
+    }
+    .edgeLabel p { padding: 3px 10px; }
+    .labelBkg { background: transparent !important; fill: none !important; }
+---
+flowchart TB
+    Quilt[("<b>Quilt</b><br/>e.g. wasp_qs8x6a0.75.jpg")]
+    Client(["<b>Another computer</b><br/>curl, a script"])
+    Drive("<b>Looking Glass's USB drive</b><br/>LKG_calibration/visual.json")
+
+    subgraph Holo["HOLO-PI&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+        CLI("<b>cli.py</b><br/>show, numbers, render")
+        Server("<b>server.py</b><br/>FastAPI, port 8095")
+        Calibration("<b>calibration.py</b><br/>pitch, tilt, center")
+        Interleaver{{"<b>interleave.py</b><br/>Interleaver, its table"}}
+        Cache[("<b>~/.cache/holo-pi</b><br/>the tables")]
+        Viewer("<b>viewer.py</b><br/>full-screen GTK window")
+        DRM("<b>drm.py</b><br/>DRM/KMS, no desktop")
+    end
+
+    Screen("<b>Looking Glass's screen</b><br/>behind slanted lenses,<br/>e.g. 1536 x 2048")
+
+    Quilt ==> CLI
+    Client == "POST /quilt" ==> Server
+    Drive -- "mounted under /media" --> Calibration
+    CLI ==> Interleaver
+    Server ==> Interleaver
+    Calibration --> Interleaver
+    Interleaver <-. "once per layout" .-> Cache
+    Interleaver == "hologram" ==> Viewer
+    Interleaver == "hologram" ==> DRM
+    Viewer == "HDMI" ==> Screen
+    DRM == "HDMI" ==> Screen
+
+    classDef human fill:#ffe4e6,stroke:#e11d48,stroke-width:2px,color:#881337
+    classDef voice fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a
+    classDef mind  fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#4c1d95
+    classDef brain fill:#7c3aed,stroke:#5b21b6,stroke-width:2px,color:#ffffff
+    classDef robot fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#78350f
+    classDef data  fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#1e3a8a
+    classDef ext   fill:#f1f5f9,stroke:#64748b,stroke-width:2px,color:#0f172a
+
+    class Client human
+    class Quilt,Cache data
+    class Drive,Screen robot
+    class CLI,Server voice
+    class Calibration,Viewer,DRM mind
+    class Interleaver brain
+
+    style Holo fill:#8b5cf612,stroke:#8b5cf6,stroke-width:1.5px,stroke-dasharray:6 5,color:#7c3aed
+
+    linkStyle 0,1,3,4 stroke:#14b8a6,stroke-width:3px
+    linkStyle 2,5 stroke:#d97706,stroke-width:2px
+    linkStyle 6 stroke:#3b82f6,stroke-width:2px
+    linkStyle 7,8,9,10 stroke:#8b5cf6,stroke-width:3px

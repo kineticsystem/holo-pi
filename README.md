@@ -39,73 +39,8 @@ The hologram is a quilt, the format of Looking Glass's still holograms: one imag
 - shows that image on the Portrait, pixel for pixel, straight through the Pi's HDMI, with no desktop and no window;
 - keeps the last quilt, and shows it again after the Pi restarts, or a test quilt until the first one comes.
 
-```mermaid
----
-config:
-  theme: base
-  themeCSS: ".edgeLabel p { padding: 4px 10px; }"
-  flowchart:
-    padding: 20
-    nodeSpacing: 40
-    rankSpacing: 50
-  class:
-    padding: 16
-  sequence:
-    boxMargin: 12
-    boxTextMargin: 8
-    noteMargin: 28
-    messageMargin: 40
-    actorMargin: 60
-    labelBoxWidth: 56
-    labelBoxHeight: 28
-  themeVariables:
-    primaryColor: "#3b6fb6"
-    primaryTextColor: "#ffffff"
-    primaryBorderColor: "#2c5590"
-    lineColor: "#8b949e"
-    textColor: "#4d86d6"
-    actorBkg: "#3b6fb6"
-    actorBorder: "#2c5590"
-    actorTextColor: "#ffffff"
-    actorLineColor: "#8b949e"
-    signalColor: "#8b949e"
-    signalTextColor: "#4d86d6"
-    noteBkgColor: "#3b6fb6"
-    noteTextColor: "#ffffff"
-    noteBorderColor: "#2c5590"
-    secondaryColor: "#3b6fb6"
-    tertiaryColor: "#3b6fb6"
-    clusterBkg: "transparent"
-    clusterBorder: "#8b949e"
-    titleColor: "#4d86d6"
-    edgeLabelBackground: "#3b6fb6"
-    classText: "#ffffff"
-    labelBoxBkgColor: "#3b6fb6"
-    labelBoxBorderColor: "#2c5590"
-    labelTextColor: "#ffffff"
-    loopTextColor: "#4d86d6"
-    mainBkg: "#3b6fb6"
-    nodeBorder: "#2c5590"
-    nodeTextColor: "#ffffff"
-    secondaryBorderColor: "#2c5590"
-    secondaryTextColor: "#ffffff"
-    tertiaryBorderColor: "#2c5590"
-    tertiaryTextColor: "#ffffff"
-    errorBkgColor: "#3b6fb6"
-    errorTextColor: "#ffffff"
----
-flowchart TB
-    Maker["Any computer on the network<br/>curl, a script, a render pipeline"]
-    subgraph Pi["Raspberry Pi with Raspberry Pi OS Lite, holo.local"]
-        Server["HoloPi's server, in Docker<br/>port 8095"]
-    end
-    Portrait["Looking Glass Portrait"]
-    Maker -- "POST /quilt" --> Server
-    Server -- "HDMI, DRM/KMS" --> Portrait
-    Portrait -- "USB, its calibration" --> Server
-
-    classDef default fill:#3b6fb6,stroke:#2c5590,color:#ffffff
-```
+<!-- The source is docs/diagrams/overview.mmd: change it, then run bin/render-diagrams.sh. -->
+<p align="center"><img src="docs/diagrams/overview.svg" alt="Any computer on the network sends a quilt with POST /quilt to HoloPi's server, which runs in Docker on the Raspberry Pi, holo.local, and draws it on the Looking Glass Portrait over HDMI with DRM/KMS; the Portrait gives the server its calibration over USB." width="404"></p>
 
 The Pi needs only Docker: HoloPi runs in a container that starts with the Pi. On a Pi 5, a quilt is on the Portrait about 0.3 seconds after its upload, and the Portrait shows a hologram about a minute and a half after the Pi is switched on.
 
@@ -424,6 +359,8 @@ python3 -m unittest discover tests
 ```
 
 The tests need no display: they check the calibration, the layouts, the interleaving against views checked through a Portrait's lenses, the test quilt, the DRM screen's helpers, the command line and, with FastAPI, httpx and python-multipart installed, the server with a fake screen. Without them, the server's tests are skipped. How HoloPi is built is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+The diagrams of the documents are SVG images rendered from their Mermaid sources, `docs/diagrams/*.mmd`. After changing one, run `bin/render-diagrams.sh`, which needs Node.js and Google Chrome or Chromium, and commit both files. `bin/check-diagrams.sh` fails when an image is older than its source.
 
 ## Troubleshooting
 
