@@ -1,6 +1,6 @@
 # Videos on the GPU, a Library, a REST API and a Web Page
 
-Branch `video-playback`. No pull request yet.
+Pull request [#6](https://github.com/kineticsystem/holo-pi/pull/6), branch `video-playback`.
 
 ## Goal
 
