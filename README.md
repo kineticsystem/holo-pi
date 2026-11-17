@@ -125,7 +125,7 @@ The build takes a few minutes on a Pi: the image is Debian's packages of Python,
 curl http://holo.local:8095/status
 ```
 
-The server starts with the Pi from now on, until `./docker/dock.sh stop`. Its API is documented live, with a page to try each request, on `http://holo.local:8095/docs`.
+The server starts with the Pi from now on, until `./docker/dock.sh stop`. Its web page is on `http://holo.local:8095`, and its API is documented live, with a page to try each request, on `http://holo.local:8095/api/docs`.
 
 ### A Clean Screen at Boot
 
