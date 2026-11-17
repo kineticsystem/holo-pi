@@ -1,5 +1,7 @@
 # HoloPi
 
+[![CI](https://github.com/kineticsystem/holo-pi/actions/workflows/ci.yml/badge.svg)](https://github.com/kineticsystem/holo-pi/actions/workflows/ci.yml)
+
 ## Table of Contents <!-- omit in toc -->
 
 - [Introduction](#introduction)
@@ -117,13 +119,13 @@ cd holo-pi
 ./docker/dock.sh start
 ```
 
-The build takes a few minutes on a Pi: the image is Debian's packages of Python, numpy, Pillow, FastAPI, uvicorn and libdrm, with nothing to compile. Then the Portrait shows the test quilt of numbered views, and the server answers on port 8095:
+The build takes a few minutes on a Pi: the image is Debian's packages of Python, numpy, Pillow, FastAPI, uvicorn, PyAV, libdrm and Mesa, with Raspberry Pi's FFmpeg on a Pi, and the web page, which a first stage builds with Node.js; nothing else is compiled. Then the Portrait shows the test quilt of numbered views, and the server answers on port 8095:
 
 ```bash
-curl http://holo.local:8095/status
+curl http://holo.local:8095/api/status
 ```
 
-The server starts with the Pi from now on, until `./docker/dock.sh stop`. Its API is documented live, with a page to try each request, on `http://holo.local:8095/docs`.
+The server starts with the Pi from now on, until `./docker/dock.sh stop`. Its web page is on `http://holo.local:8095`, and its API is documented live, with a page to try each request, on `http://holo.local:8095/api/docs`.
 
 ### A Clean Screen at Boot
 
@@ -443,7 +445,7 @@ The diagrams of the documents are SVG images rendered from their Mermaid sources
 
 ## Troubleshooting
 
-**The Portrait stays black, or shows the console, after the Pi is switched on.** The Pi and Docker take about a minute and a half to start the server. Then `curl http://holo.local:8095/status` says what the server sees, and `./docker/dock.sh logs` on the Pi what it did.
+**The Portrait stays black, or shows the console, after the Pi is switched on.** The Pi and Docker take about a minute and a half to start the server. Then `curl http://holo.local:8095/api/status` says what the server sees, and `./docker/dock.sh logs` on the Pi what it did.
 
 **The server answers `503`, and the quilt is kept.** It cannot show yet: the message says why, e.g. `no Looking Glass found` or `no screen of 1536 x 2048`. It tries again every 5 seconds, and `GET /status` says when it is shown.
 
