@@ -20,6 +20,12 @@ export function DisplayCard({ display }: { display: Display | null }) {
           <dd>{display.frame_rate} fps{display.media?.fps ? ` of ${Math.round(display.media.fps)}` : ''}</dd>
         </>
       )}
+      {display.then && (
+        <>
+          <dt>Then</dt>
+          <dd>{display.then.name}, in a loop</dd>
+        </>
+      )}
       {display.decoder && (
         <>
           <dt>Decoder</dt>

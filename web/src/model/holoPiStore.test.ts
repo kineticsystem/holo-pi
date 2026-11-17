@@ -42,5 +42,5 @@ describe('the store', () => {
 
 function initialDisplay() {
   return { source: null, media: null, name: null, kind: null, reverse: false, shown: false, shown_on: null,
-           error: null, frame_rate: null, decoder: null, warning: null };
+           error: null, frame_rate: null, decoder: null, warning: null, then: null };
 }

@@ -209,6 +209,12 @@ curl -X PUT -H "Content-Type: application/json" -d '{"media_name": "spheres_qs8x
 
 On a Pi 5, a quilt is on the Looking Glass about 0.8 seconds later, a video about 0.2 seconds later, where uploading a 120 MB video takes about 2.5 seconds over gigabit Ethernet. An upload of a name the library has replaces it, and keeps its id.
 
+A video can play once, then another in a loop, with no gap between them, e.g. a character's one-off gesture, then its idle loop:
+
+```bash
+curl -X PUT -H "Content-Type: application/json" -d '{"media_name": "oops_qs8x6a0.75.mp4", "then": {"media_name": "idle_qs8x6a0.75.mp4"}}' http://holo.local:8095/api/display
+```
+
 | Request | What it does |
 |---|---|
 | `GET /api/media` | Lists the library, with the space it takes and the space left. |
@@ -255,7 +261,7 @@ The API is on `/api`, documented by the server itself with Swagger UI on [`/api/
 | Request | What it does |
 |---|---|
 | `GET /api/display` | What the Looking Glass shows, whether it is on the screen, where or why not, and how a video plays. |
-| `PUT /api/display` | Shows a medium of the library, `{"media_id": ...}` or `{"media_name": ...}`, or the test pattern, `{"test_pattern": true}`. |
+| `PUT /api/display` | Shows a medium of the library, `{"media_id": ...}` or `{"media_name": ...}`, or the test pattern, `{"test_pattern": true}`; with `"then": {...}`, a video once, then another in a loop. |
 | `DELETE /api/display` | Shows black; what was shown stays in the library. |
 | `GET /api/status` | The server's version, its screen, the Looking Glass, and what it shows. |
 | `GET /api/calibration` | The Looking Glass's calibration. |

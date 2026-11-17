@@ -130,6 +130,7 @@ class Display:
         self.video = None
         self.player = None
         self.video_error = None  # Why the video has no player, e.g. no calibration yet.
+        self.then = None  # The video to play in a loop after the video, which then plays once.
         self.scratch = None if self.state else tempfile.TemporaryDirectory(prefix="holo-pi-")
         self.library = Library(self._folder() / "library")
         self.stopping = threading.Event()
@@ -186,25 +187,41 @@ class Display:
         QuiltError or VideoError if it cannot be shown whatever the Looking Glass."""
         return self.library.add(source, name, columns, rows, reverse, self._screen_size())
 
-    def play(self, id=None, name=None):
-        """Shows the library's quilt, or plays its video, of this id, or else of this name. Returns where. Raises
-        KeyError if there is none, and RuntimeError if it cannot be shown yet: it is kept, and shown as soon as it
-        can be."""
+    def _find(self, id, name):
         item = self.library.find(id, name)
         if item is None:
             raise KeyError(f"no quilt or video of the {'id' if id is not None else 'name'} {id or name!r}")
-        return self.play_item(item)
+        return item
 
-    def play_item(self, item, picture=None):
-        """Shows a library's item; `picture`, a quilt's, if it is read already."""
+    def play(self, id=None, name=None, then_id=None, then_name=None):
+        """Shows the library's quilt, or plays its video, of this id, or else of this name; with then_id or
+        then_name, plays that video once, then the other in a loop. Returns where. Raises KeyError if there is no
+        such quilt or video, VideoError if then is given but the two are not both videos, and RuntimeError if it
+        cannot be shown yet: it is kept, and shown as soon as it can be."""
+        item = self._find(id, name)
+        then = None
+        if then_id is not None or then_name is not None:
+            then = self._find(then_id, then_name)
+            if not (item.is_video and then.is_video):
+                raise VideoError("then plays a video once, then another in a loop: both must be videos, "
+                                 f"not {item.kind} and {then.kind}")
+        return self.play_item(item, then=then)
+
+    def _video_of(self, item):
+        return Video(item.name, item.width, item.height, item.fps, item.frames, item.duration, item.codec,
+                     item.uploaded, str(self.library.path(item)), item.columns, item.rows, item.reverse, item.id)
+
+    def play_item(self, item, picture=None, then=None):
+        """Shows a library's item; `picture`, a quilt's, if it is read already; `then`, a video to play in a loop
+        after the item, a video, has played once."""
         path = self.library.path(item)
         if item.is_video:
             with self.lock:
                 self._drop_video()
                 self.quilt, self.picture, self.shown_on, self.error = None, None, None, None
-                self.video = Video(item.name, item.width, item.height, item.fps, item.frames, item.duration,
-                                   item.codec, item.uploaded, str(path), item.columns, item.rows, item.reverse, item.id)
-                self._keep({"id": item.id})
+                self.video = self._video_of(item)
+                self.then = self._video_of(then) if then is not None else None
+                self._keep({"id": (then or item).id})   # After a restart, the loop.
                 return self._play()
         if picture is None:
             try:
@@ -216,10 +233,19 @@ class Display:
                             str(path), item.id), picture, {"id": item.id})
             return self._show()
 
+    def _videos_now(self):
+        """The video on the screen, and the one to play after it, if any: after the first has played once, the
+        second, then nothing."""
+        if self.then is not None and self.player is not None and self.player.segment == 1:
+            return self.then, None
+        return self.video, self.then
+
     def shown_id(self):
         """The library's id of what is shown, or None."""
         with self.lock:
-            return (self.video or self.quilt).id if (self.video or self.quilt) else None
+            if self.video is not None:
+                return self._videos_now()[0].id
+            return self.quilt.id if self.quilt else None
 
     def remove(self, item):
         """Removes an item from the library; if it is shown, shows black."""
@@ -287,23 +313,28 @@ class Display:
         video = self.video
         try:
             calibration = self.calibration()
-            if video.columns is None:  # A hologram video: its frames as they are.
-                show, convert = self.screen.show, hologram_pictures(
-                    step(video.width, video.height, calibration.width, calibration.height))
-            else:
-                show, convert = self._quilt_player(video, calibration)
+            show, convert = self._player_of(video, calibration)
+            then = (self.then.file, *self._player_of(self.then, calibration)) if self.then is not None else None
         except (RuntimeError, VideoError) as error:
             if str(error) != self.video_error:
                 log.warning("Cannot play %s yet: %s", video.name, error)
             self.video_error = str(error)
             raise RuntimeError(str(error)) from error
         self.video_error = None
-        self.player = Player(video.file, show, convert).start()
+        self.player = Player(video.file, show, convert, then).start()
         self.player.started.wait(STARTED_S)
         if self.player.shown_on is None:
             raise RuntimeError(self.player.error or "the video's first frame is not on the screen yet")
         log.info("Playing %s on %s", video.name, self.player.shown_on)
         return self.player.shown_on
+
+    def _player_of(self, video, calibration):
+        """How a video's frames are shown, (show, convert): a hologram video's as they are, a quilt video's
+        interleaved."""
+        if video.columns is None:
+            return self.screen.show, hologram_pictures(step(video.width, video.height, calibration.width,
+                                                            calibration.height))
+        return self._quilt_player(video, calibration)
 
     def _quilt_player(self, video, calibration):
         """How a quilt video's frames are shown: interleaved by the GPU, if the screen has one, as decoded; otherwise
@@ -322,7 +353,7 @@ class Display:
     def _drop_video(self):
         """Stops the video: its file stays in the library."""
         self._stop_player()
-        self.video, self.video_error = None, None
+        self.video, self.then, self.video_error = None, None, None
 
     def retry(self):
         """Shows the quilt or the video that could not be shown, if any: when the Looking Glass is plugged in, or
@@ -469,10 +500,13 @@ class Display:
         """What the Looking Glass shows, as the API answers it."""
         with self.lock:
             nothing = {"source": None, "media": None, "name": None, "kind": None, "reverse": False, "shown": False,
-                       "shown_on": None, "error": None, "frame_rate": None, "decoder": None, "warning": None}
+                       "shown_on": None, "error": None, "frame_rate": None, "decoder": None, "warning": None,
+                       "then": None}
             if self.video is not None:
-                video, player = self.video, self.player
+                player = self.player
+                video, then = self._videos_now()
                 item = self.library.find(id=video.id)
+                then_item = self.library.find(id=then.id) if then is not None else None
                 shown_on = player.shown_on if player else None
                 rate = player.frame_rate() if player else None
                 return dict(nothing, source=MEDIA, media=item and self.item_status(item), name=video.name,
@@ -480,7 +514,7 @@ class Display:
                             shown=shown_on is not None, shown_on=shown_on,
                             error=(player.error if player else self.video_error) if shown_on is None else None,
                             frame_rate=None if rate is None else round(rate, 1), decoder=player and player.decoding,
-                            warning=codec_warning(video.codec))
+                            warning=codec_warning(video.codec), then=then_item and self.item_status(then_item))
             if self.quilt is not None:
                 quilt = self.quilt
                 item = self.library.find(id=quilt.id) if quilt.id else None
@@ -604,6 +638,15 @@ class DisplayModel(BaseModel):
     decoder: Optional[str] = Field(None, description="What decodes a video: hardware, e.g. a Raspberry Pi 5's HEVC "
                                                      "decoder, or software, the processor.", examples=["hardware"])
     warning: Optional[str] = Field(None, description="What to change, for a video not in H.265 (HEVC).")
+    then: Optional[MediaModel] = Field(None, description="The video to play in a loop once this one has played "
+                                                         "once, as PUT /api/display's then asked; null once it "
+                                                         "plays, and without then.")
+
+
+class ThenRequest(BaseModel):
+    media_id: Optional[str] = Field(None, description="The library's video of this id.", examples=["5e1d0b7a"])
+    media_name: Optional[str] = Field(None, description="The library's video of this name.",
+                                      examples=["idle_qs8x6a0.75.mp4"])
 
 
 class DisplayRequest(BaseModel):
@@ -614,6 +657,10 @@ class DisplayRequest(BaseModel):
                                                   "the lenses, one number fills the screen; a mix of numbers means "
                                                   "that the calibration is wrong.")
     reverse: bool = Field(False, description="With test_pattern, its views in the other order.")
+    then: Optional[ThenRequest] = Field(None, description="With a video, the video to play after it, in a loop: the "
+                                                          "first plays once, then this one, with no gap, e.g. a "
+                                                          "character's one-off gesture, then its idle loop. Both "
+                                                          "must be videos. After a restart, this one plays.")
 
 
 class StatusModel(BaseModel):
@@ -769,22 +816,30 @@ def create_app(display, web=None):
         return display.display_status()
 
     @app.put("/api/display", tags=["display"], response_model=DisplayModel, summary="Show a medium",
-             responses={**error(400, "Not one of media_id, media_name and test_pattern."),
+             responses={**error(400, "Not one of media_id, media_name and test_pattern, then not one of media_id "
+                                     "and media_name, or then with a quilt."),
                         **error(404, "No medium of this id or name."), **NOT_YET})
     def put_display(request: DisplayRequest):
         """Shows the library's quilt, or plays its video in a loop, by its id or its name, or the test pattern: at
-        once, as nothing is uploaded. It answers once it is on the Looking Glass, a video's first frame too; it
-        stays, also after a restart, until something else replaces it."""
+        once, as nothing is uploaded. With then, a video plays once, then the video then names in a loop, with no
+        gap. It answers once it is on the Looking Glass, a video's first frame too; it stays, also after a restart,
+        until something else replaces it."""
         if [request.media_id is not None, request.media_name is not None, request.test_pattern].count(True) != 1:
             raise HTTPException(400, "give one of media_id, media_name and test_pattern, e.g. "
                                      '{"media_name": "helix_qs8x6a0.75.mp4"}')
+        then = request.then
+        if then is not None and ((then.media_id is None) == (then.media_name is None) or request.test_pattern):
+            raise HTTPException(400, "then needs one of media_id and media_name, after a medium, e.g. "
+                                     '{"media_name": "oops_qs8x6a0.75.mp4", "then": {"media_name": "idle_qs8x6a0.75.mp4"}}')
         try:
             if request.test_pattern:
                 display.show_test_pattern(request.reverse)
             else:
-                display.play(request.media_id, request.media_name)
+                display.play(request.media_id, request.media_name, then and then.media_id, then and then.media_name)
         except KeyError as problem:
             raise HTTPException(404, problem.args[0]) from problem
+        except VideoError as problem:
+            raise HTTPException(400, str(problem)) from problem
         except RuntimeError as problem:
             raise HTTPException(503, f"{_sentence(problem)} It is kept, and shown as soon as it can be.") from problem
         return display.display_status()

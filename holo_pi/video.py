@@ -135,7 +135,10 @@ def yuv_frames(frame):
 
 class Player:
     """Plays a video in a loop, at its frame rate, until stop(): `convert` makes each frame ready, on the decoder's
-    thread, e.g. hologram_pictures(); `show` puts it on the screen, on the player's, and returns where.
+    thread, e.g. hologram_pictures(); `show` puts it on the screen, on the player's, and returns where. With
+    `then`, (path, show, convert) of a second video, it plays the first once, then the second in a loop, with no
+    gap between them: the decoder goes on into the second while the first is still shown. segment says which is
+    on the screen, 0 or 1.
 
     Two threads: the decoder decodes the frames ahead, again and again, into a queue of AHEAD frames, so that
     starting the video again, when its decoder fills up anew, does not stop the screen; the player shows each
@@ -143,17 +146,20 @@ class Player:
     because the Looking Glass is switched off, it tries again every RETRY_S. shown_on says where the video is shown
     and error why not; started is set once the first frame is shown, or cannot be."""
 
-    def __init__(self, path, show, convert=None):
-        self.path = str(path)
-        self.show = show
-        self.convert = convert or hologram_pictures()
+    def __init__(self, path, show, convert=None, then=None):
+        # The videos to play: (path, show, convert), the last in a loop, those before it once.
+        self.segments = [(str(path), show, convert or hologram_pictures())]
+        if then is not None:
+            then_path, then_show, then_convert = then
+            self.segments.append((str(then_path), then_show, then_convert or hologram_pictures()))
+        self.segment = 0  # The one on the screen.
         self.shown_on = None
         self.error = None
         self.shown_at = collections.deque(maxlen=49)  # When the last frames were shown, for frame_rate().
         self.decoding = None  # "hardware" or "software", once the first frame is decoded.
         self.started = threading.Event()
         self.stopping = threading.Event()
-        self.frames = queue.Queue(AHEAD)  # (when, period, picture), or the VideoError that ends the video.
+        self.frames = queue.Queue(AHEAD)  # (when, period, picture, segment), or the VideoError that ends it.
         self.thread = threading.Thread(target=self._run, name="video", daemon=True)
         self.decoder = threading.Thread(target=self._decode, name="video decoder", daemon=True)
 
@@ -173,9 +179,11 @@ class Player:
     def _decode(self):
         av = _av()
         offset = 0.0  # When this round starts, in seconds from the start of the first.
+        segment = 0
         try:
             while not self.stopping.is_set():
-                with open_video(av, self.path) as container:
+                path, _, convert = self.segments[segment]
+                with open_video(av, path) as container:
                     stream = container.streams.video[0]
                     stream.thread_type = "AUTO"  # On the processor, decoding on every core.
                     period = 1 / float(stream.average_rate or stream.guessed_rate or 24)
@@ -188,11 +196,12 @@ class Player:
                         at = frame.time if frame.time is not None else number * period
                         first = at if first is None else first
                         length = at - first + period
-                        if not self._put((offset + at - first, period, self.convert(frame))):
+                        if not self._put((offset + at - first, period, convert(frame), segment)):
                             return
                     if first is None:
                         raise VideoError("no frame in the video")
                 offset += length
+                segment = min(segment + 1, len(self.segments) - 1)   # The last one, again and again.
         except (av.error.FFmpegError, ValueError) as error:  # The file: playing it again would fail again.
             self._put(VideoError(f"cannot play the video: {error}"))
 
@@ -219,7 +228,7 @@ class Player:
             if isinstance(item, VideoError):
                 self._failed(str(item))
                 return
-            at, period, picture = item
+            at, period, picture, segment = item
             now = time.monotonic()
             if origin is None or now - (origin + at) > RESYNC_S:
                 origin = now - at  # The first frame, or far behind, e.g. decoding slower than the frame rate.
@@ -232,7 +241,7 @@ class Player:
                 # is what is slow, every frame is shown, later than its time.
                 continue
             try:
-                self._show(picture)
+                self._show(picture, segment)
             except ValueError as error:  # The video, e.g. a quilt larger than the GPU takes: it would fail again.
                 self._failed(f"cannot play the video: {error}")
                 return
@@ -244,8 +253,9 @@ class Player:
                 continue
             shown = time.monotonic()
 
-    def _show(self, picture):
-        where = self.show(picture)
+    def _show(self, picture, segment=0):
+        where = self.segments[segment][1](picture)
+        self.segment = segment
         if self.shown_on is None:
             log.info("Playing the video on %s", where)
         self.shown_on, self.error = where, None
