@@ -1,0 +1,4 @@
+allowBuilds:
+  esbuild: true
+  # Swagger UI's usage tracking: never run it.
+  '@scarf/scarf': false

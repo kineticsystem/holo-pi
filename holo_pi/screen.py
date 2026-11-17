@@ -1,14 +1,19 @@
-"""The screens a hologram is shown on: a desktop's monitor, with GTK, or the screen itself, through DRM/KMS.
+"""The screens a hologram is shown on: a desktop's monitor, with GTK, or the screen itself, through DRM/KMS, drawn
+by the processor, drm, or by the GPU, gl.
 
-Both have the same methods: show(hologram) returns where it is shown, clear(),
+They have the same methods: show(hologram) returns where it is shown, clear(),
 close(), and run(stop), which runs on the main thread until `stop`, a
-threading.Event, is set or the process is stopped.
+threading.Event, is set or the process is stopped. A hologram is an array of
+the screen's size, RGB, or XRGB8888 as a video's frames are decoded: blue,
+green, red and a padding byte. The GPU's screen also has show_quilt() and
+show_quilt_frame(), which interleave on the GPU: the server uses them when they
+are there.
 """
 
 import os
 import signal
 
-KINDS = ["auto", "desktop", "drm"]
+KINDS = ["auto", "desktop", "drm", "gl"]
 
 
 def desktop_running():
@@ -28,7 +33,7 @@ def choose(kind="auto"):
 
 
 def open_screen(kind="auto", closable=True):
-    """The screen of the given kind: "desktop", "drm", or "auto", see choose(). Call it on the main thread."""
+    """The screen of the given kind: "desktop", "drm", "gl", or "auto", see choose(). Call it on the main thread."""
     kind = choose(kind)
     if kind == "desktop":
         # GTK only when a desktop is used: the rest works without it.
@@ -37,6 +42,9 @@ def open_screen(kind="auto", closable=True):
     if kind == "drm":
         from .drm import DrmScreen
         return _Interruptible(DrmScreen())
+    if kind == "gl":
+        from .gl import GlScreen
+        return _Interruptible(GlScreen())
     raise ValueError(f"no screen {kind!r}: one of {', '.join(KINDS)}")
 
 
@@ -49,6 +57,9 @@ class _Interruptible:
 
     def show(self, hologram):
         return self.screen.show(hologram)
+
+    def __getattr__(self, name):  # e.g. show_quilt() and show_quilt_frame() of the GPU's screen.
+        return getattr(self.screen, name)
 
     def clear(self):
         self.screen.clear()

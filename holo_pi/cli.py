@@ -76,7 +76,7 @@ def serve(arguments):
         raise RuntimeError(f"the server needs FastAPI, uvicorn and python-multipart: {error}") from error
     return run_server(host=arguments.host, port=arguments.port, screen=arguments.screen,
                       calibration=arguments.calibration, state=arguments.state, mount=arguments.mount_drive,
-                      default=arguments.default_quilt)
+                      default=arguments.default_quilt, web=arguments.web)
 
 
 def main(argv=None):
@@ -86,7 +86,7 @@ def main(argv=None):
 
     def common(command, quilt=True):
         if quilt:
-            command.add_argument("quilt", type=Path, help="the quilt, e.g. wasp_qs8x6a0.75.jpg")
+            command.add_argument("quilt", type=Path, help="the quilt, e.g. spheres_qs8x6a0.75.jpg")
             command.add_argument("--columns", type=int, help="the quilt's columns, if its name does not say")
             command.add_argument("--rows", type=int, help="the quilt's rows, if its name does not say")
         command.add_argument("--calibration", type=Path,
@@ -96,8 +96,9 @@ def main(argv=None):
 
     def screen(command):
         command.add_argument("--screen", choices=KINDS, default="auto",
-                             help="a desktop's monitor, or the screen itself through DRM/KMS without a desktop; "
-                                  "auto: the screen itself if nothing drives it, the desktop otherwise")
+                             help="a desktop's monitor, or the screen itself through DRM/KMS without a desktop, "
+                                  "drawn by the processor, drm, or the GPU, gl; auto: drm if nothing drives the "
+                                  "screen, the desktop otherwise")
 
     show_command = commands.add_parser("show", help="show a quilt on the Looking Glass, until Escape or q")
     common(show_command)
@@ -119,10 +120,12 @@ def main(argv=None):
                              "default: ~/.local/state/holo-pi")
     server.add_argument("--default-quilt", metavar="QUILT",
                         help="what to show when no quilt is kept, e.g. at the first start: numbers, the test "
-                             "quilt, or a quilt file whose name gives its layout, e.g. quilts/wasp_qs8x6a0.75.jpg")
+                             "quilt, or a quilt file whose name gives its layout, e.g. quilts/spheres_qs8x6a0.75.jpg")
     server.add_argument("--mount-drive", action="store_true",
                         help="mount the Looking Glass's drive, read-only, if nothing has, e.g. without a desktop; "
                              "needs root")
+    server.add_argument("--web", type=Path, metavar="FOLDER",
+                        help="the web page's built files; default: $HOLO_PI_WEB, or web/dist of the checkout")
     screen(server)
     calibration = commands.add_parser("calibration", help="print the Looking Glass's calibration")
     calibration.add_argument("--calibration", type=Path, help="a visual.json, instead of the one found")

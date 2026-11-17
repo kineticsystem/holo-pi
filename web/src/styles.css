@@ -1,0 +1,64 @@
+:root {
+  color-scheme: dark;
+  --background: #14171c;
+  --panel: #1d2128;
+  --line: #2e343e;
+  --text: #e6e9ee;
+  --muted: #8c95a3;
+  --accent: #6ad1ff;
+  --warm: #ffb14e;
+  --danger: #ff6b6b;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--background);
+  color: var(--text);
+}
+body { margin: 0; }
+header { display: flex; align-items: baseline; gap: 1.5rem; padding: 0.8rem 1.5rem; border-bottom: 1px solid var(--line); }
+header h1 { margin: 0; font-size: 1.3rem; color: var(--accent); }
+header .glass, header .version { color: var(--muted); font-size: 0.9rem; }
+header a { margin-left: auto; color: var(--accent); }
+main { display: grid; grid-template-columns: minmax(20rem, 28rem) 1fr; gap: 1rem; padding: 1rem 1.5rem; align-items: start; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+.side { display: grid; gap: 1rem; }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.2rem; }
+h2 { margin: 0 0 0.8rem; font-size: 1.05rem; }
+button, .button { background: #2a303a; color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 0.35rem 0.8rem; font: inherit; cursor: pointer; text-decoration: none; display: inline-block; }
+button:disabled { opacity: 0.45; cursor: default; }
+button.primary { background: #1f4f66; border-color: #2c6f8e; }
+button.danger { border-color: #6b2f2f; color: #ffb3b3; }
+.buttons, .confirm { display: flex; gap: 0.5rem; margin-top: 0.8rem; }
+.confirm { display: inline-flex; margin: 0; }
+.error { color: var(--danger); }
+.warning { color: var(--warm); }
+.done { color: #9be59b; }
+.empty, .black { color: var(--muted); }
+dl.display { display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 1rem; margin: 0; }
+dl.display dt { color: var(--muted); }
+dl.display dd { margin: 0; }
+.upload { display: grid; gap: 0.7rem; }
+.upload fieldset { border: 1px solid var(--line); border-radius: 6px; display: flex; flex-wrap: wrap; gap: 0.7rem; }
+.upload legend { color: var(--muted); font-size: 0.85rem; }
+.upload input[type=number] { width: 4.5rem; background: #12151a; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 0.2rem; }
+label.check { display: flex; align-items: center; gap: 0.4rem; }
+.totals { display: flex; align-items: center; gap: 0.7rem; color: var(--muted); flex-wrap: wrap; }
+table.media { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+table.media th { text-align: left; color: var(--muted); font-weight: normal; border-bottom: 1px solid var(--line); padding: 0.4rem; }
+table.media td { border-bottom: 1px solid var(--line); padding: 0.45rem 0.4rem; vertical-align: top; }
+table.media tr.shown td { background: #17303b; }
+table.media .id { color: var(--muted); font-family: ui-monospace, monospace; font-size: 0.8rem; }
+table.media .actions { white-space: nowrap; display: flex; gap: 0.4rem; justify-content: flex-end; }
+.badge { white-space: nowrap; margin-left: 0.5rem; font-size: 0.75rem; border: 1px solid var(--accent); color: var(--accent); border-radius: 10px; padding: 0 0.45rem; }
+.badge.warning { border-color: var(--warm); color: var(--warm); }
+.dropzone { display: grid; gap: 0.2rem; justify-items: center; padding: 1.4rem 1rem; border: 2px dashed var(--line); border-radius: 8px; color: var(--muted); cursor: pointer; text-align: center; }
+.dropzone strong { color: var(--text); }
+.dropzone.over, .dropzone:focus-visible { border-color: var(--accent); background: #17303b; outline: none; }
+.queue ul { list-style: none; margin: 0.8rem 0 0; padding: 0; display: grid; gap: 0.5rem; }
+.queue li { border: 1px solid var(--line); border-radius: 6px; padding: 0.4rem 0.6rem; }
+.queue .line { display: flex; align-items: center; gap: 0.6rem; }
+.queue .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue .size, .queue .status { color: var(--muted); font-size: 0.85rem; }
+.queue li.done .status { color: #9be59b; }
+.queue li.warned { border-color: #6b5420; }
+.queue li.warned .status { color: var(--warm); }
+.queue li.failed .status { color: var(--danger); }
+.queue progress { width: 100%; }

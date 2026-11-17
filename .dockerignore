@@ -1,0 +1,7 @@
+# What the image is built from: the web page's sources and Raspberry Pi's key,
+# nothing else. Above all not quilts/, hundreds of MB of test videos.
+*
+!web/
+!docker/raspberrypi-archive-keyring.pgp
+web/node_modules/
+web/dist/

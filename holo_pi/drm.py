@@ -6,7 +6,11 @@ own image on them, as a desktop does. The Looking Glass is the connected screen
 whose mode is of the calibration's size, e.g. 1536 x 2048 for a Portrait, its
 preferred mode. The hologram goes into a dumb buffer, an image in memory that
 the display controller scans out pixel for pixel: no scaling, no window, no
-compositor.
+compositor. There are two: the next hologram goes into the one not on screen,
+which a page flip then puts on screen at the screen's next refresh, so that a
+video never shows half of two frames. show() does not wait for the refresh: the
+next show() does, before it draws into the buffer that the flip takes off
+screen, so that a video's next frame is decoded meanwhile.
 
 The screen shows the hologram for as long as the program keeps the card open.
 When it closes it, e.g. when it stops, the console comes back.
@@ -21,6 +25,7 @@ import ctypes.util
 import errno
 import mmap
 import os
+import select
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,6 +35,9 @@ import numpy as np
 CARDS = "/dev/dri"
 CONNECTED = 1
 PREFERRED = 1 << 3  # DRM_MODE_TYPE_PREFERRED: the mode the screen asks for.
+PAGE_FLIP_EVENT = 1  # DRM_MODE_PAGE_FLIP_EVENT: say when the flip is done.
+# How long a page flip may take: a refresh, 17 ms at 60 Hz, unless the screen is gone.
+FLIP_TIMEOUT_S = 1
 
 # The names of the connector types of the kernel's drm_mode.h, for the messages.
 CONNECTOR_TYPES = {1: "VGA", 2: "DVI-I", 3: "DVI-D", 4: "DVI-A", 5: "Composite", 6: "S-Video", 7: "LVDS",
@@ -132,6 +140,8 @@ def _library():
         drm.drmModeSetCrtc.argtypes = [ctypes.c_int, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32,
                                        ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32), ctypes.c_int,
                                        ctypes.POINTER(_ModeInfo)]
+        drm.drmModePageFlip.argtypes = [ctypes.c_int, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32,
+                                        ctypes.c_void_p]
         drm.drmIoctl.argtypes = [ctypes.c_int, ctypes.c_ulong, ctypes.c_void_p]
         drm.drmAuthMagic.argtypes = [ctypes.c_int, ctypes.c_uint]
         _libdrm = drm
@@ -349,7 +359,8 @@ class DrmScreen:
         self.fd = None
         self.output = None
         self.buffers = []
-        self.front = None
+        self.front = None  # The buffer on screen, or about to be, once the flip is done.
+        self.flipping = False  # Whether a page flip waits for the screen's next refresh.
         self.saved = None  # What the display controller showed before, e.g. the console, to give it back.
 
     def _open(self, width, height):
@@ -358,6 +369,10 @@ class DrmScreen:
         self.buffers = [_Buffer(self.drm, self.fd, width, height) for _ in range(2)]
 
     def _release(self):
+        try:
+            self._wait_for_flip()
+        except OSError:
+            pass  # The screen is gone: closing the card ends the flip.
         # What it showed before first: removing a framebuffer on screen switches the screen off.
         if self.saved:
             crtc = self.saved.contents
@@ -375,7 +390,9 @@ class DrmScreen:
             self.fd, self.output = None, None
 
     def show(self, hologram):
-        """Shows an RGB hologram on the screen of its size. Returns where; raises RuntimeError if it cannot."""
+        """Shows a hologram on the screen of its size: RGB, or already XRGB8888, blue, green, red and a padding
+        byte, e.g. a video's frame decoded as BGRA. Returns where, once it is on screen or will be at the screen's
+        next refresh; raises RuntimeError if it cannot."""
         height, width = hologram.shape[:2]
         with self.lock:
             if self.output is not None and self.output.size != (width, height):
@@ -385,12 +402,22 @@ class DrmScreen:
                     if self.fd is None:
                         self._open(width, height)
                     # Draw into the buffer not on screen, then switch: the screen never shows half of each.
+                    self._wait_for_flip()
                     back = self.buffers[1] if self.front is self.buffers[0] else self.buffers[0]
-                    back.pixels[:] = xrgb(hologram)
-                    connector = ctypes.c_uint32(self.output.connector)
-                    _check(self.drm.drmModeSetCrtc(self.fd, self.output.crtc, back.framebuffer, 0, 0,
-                                                   ctypes.byref(connector), 1, ctypes.byref(self.output.mode)),
-                           "cannot show on the screen")
+                    if hologram.shape[2] == 4 and hologram.strides[2] == 1:
+                        # Pixel by pixel, not byte by byte: eight times faster for one column of two of a video.
+                        back.pixels.view(np.uint32)[..., 0] = hologram.view(np.uint32)[..., 0]
+                    elif hologram.shape[2] == 4:
+                        back.pixels[:] = hologram
+                    else:
+                        back.pixels[:] = xrgb(hologram)
+                    if self.front is None:
+                        connector = ctypes.c_uint32(self.output.connector)
+                        _check(self.drm.drmModeSetCrtc(self.fd, self.output.crtc, back.framebuffer, 0, 0,
+                                                       ctypes.byref(connector), 1, ctypes.byref(self.output.mode)),
+                               "cannot show on the screen")
+                    else:
+                        self._flip(back)
                     self.front = back
                     return f"{self.output.name} of {self.output.card}, {width} x {height}"
                 except OSError as error:
@@ -405,6 +432,23 @@ class DrmScreen:
                     self._release()
                     raise
         raise AssertionError("unreachable")
+
+    def _flip(self, back):
+        """Puts `back` on screen at the next refresh, without waiting: _wait_for_flip() does."""
+        _check(self.drm.drmModePageFlip(self.fd, self.output.crtc, back.framebuffer, PAGE_FLIP_EVENT, None),
+               "cannot show on the screen")
+        self.flipping = True
+
+    def _wait_for_flip(self):
+        """Waits for the page flip, if any: then the buffer it took off screen is no longer scanned out, and the
+        next hologram may be drawn into it."""
+        if not self.flipping:
+            return
+        self.flipping = False
+        ready, _, _ = select.select([self.fd], [], [], FLIP_TIMEOUT_S)
+        if not ready:
+            raise OSError(errno.ETIMEDOUT, "the screen did not take the new picture")
+        os.read(self.fd, 4096)  # The flip's event.
 
     def clear(self):
         """Shows black, if anything is shown."""
