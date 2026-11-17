@@ -21,6 +21,7 @@ os.environ["GDK_SCALE"] = "1"
 os.environ["GDK_DPI_SCALE"] = "1"
 
 import gi  # noqa: E402
+import numpy as np  # noqa: E402
 
 gi.require_version("Gdk", "3.0")
 gi.require_version("GdkPixbuf", "2.0")
@@ -108,7 +109,9 @@ class DesktopScreen:
             done.set()
             return GLib.SOURCE_REMOVE
         number, geometry = found
-        data = GLib.Bytes.new(hologram.tobytes())
+        if hologram.shape[2] == 4:  # XRGB8888: blue, green, red, padding.
+            hologram = hologram[..., 2::-1]
+        data = GLib.Bytes.new(np.ascontiguousarray(hologram).tobytes())
         pixbuf = GdkPixbuf.Pixbuf.new_from_bytes(data, GdkPixbuf.Colorspace.RGB, False, 8, width, height, width * 3)
         key = (geometry.x, geometry.y, width, height)
         if self.window is not None and self.shown_on and self.shown_on[0] == key:

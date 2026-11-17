@@ -15,7 +15,8 @@ dependencies = ["numpy", "pillow"]
 
 [project.optional-dependencies]
 # holo-pi serve: pipx install "holo-pi[server] @ git+https://..."
-server = ["fastapi", "uvicorn", "python-multipart"]
+# PyAV plays the videos: av.
+server = ["fastapi", "uvicorn", "python-multipart", "av"]
 
 [project.scripts]
 holo-pi = "holo_pi.cli:main"

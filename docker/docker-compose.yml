@@ -11,7 +11,11 @@ name: holo-pi
 
 services:
   holo-pi:
-    build: .
+    # The repo is the build's context, for the web page; .dockerignore lets in
+    # only what the image needs.
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     image: holo-pi:latest
     container_name: holo-pi
     hostname: holo-pi
@@ -41,14 +45,15 @@ services:
       - -m
       - holo_pi
       - serve
+      # Through the GPU, which interleaves quilts and quilt videos as it draws.
       - --screen
-      - drm
+      - gl
       - --state
       - /var/lib/holo-pi
       # Nothing else mounts the Looking Glass's drive in the container.
       - --mount-drive
       # Shown when no quilt is kept, e.g. at the first start: numbers, the test
-      # quilt, or a quilt of the mounted repo, e.g. quilts/wasp_qs8x6a0.75.jpg.
+      # quilt, or a quilt of the mounted repo, e.g. quilts/spheres_qs8x6a0.75.jpg.
       - --default-quilt
       - "${HOLO_PI_DEFAULT_QUILT:-numbers}"
       - --port

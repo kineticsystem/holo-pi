@@ -46,24 +46,27 @@ config:
     .labelBkg { background: transparent !important; fill: none !important; }
 ---
 flowchart TB
-    Quilt[("<b>Quilt</b><br/>e.g. wasp_qs8x6a0.75.jpg")]
-    Client(["<b>Another computer</b><br/>curl, a script"])
+    Quilt[("<b>Quilt</b><br/>e.g. spheres_qs8x6a0.75.jpg")]
+    Client(["<b>Another computer</b><br/>a browser, curl, a script"])
     Drive("<b>Looking Glass's USB drive</b><br/>LKG_calibration/visual.json")
 
     subgraph Holo["HOLO-PI&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
         CLI("<b>cli.py</b><br/>show, numbers, render")
         Server("<b>server.py</b><br/>FastAPI, port 8095")
+        Library[("<b>library.py</b><br/>the media, on disk")]
+        Video("<b>video.py</b><br/>decoder, player")
         Calibration("<b>calibration.py</b><br/>pitch, tilt, center")
         Interleaver{{"<b>interleave.py</b><br/>Interleaver, its table"}}
         Cache[("<b>~/.cache/holo-pi</b><br/>the tables")]
         Viewer("<b>viewer.py</b><br/>full-screen GTK window")
         DRM("<b>drm.py</b><br/>DRM/KMS, no desktop")
+        GL{{"<b>gl.py</b><br/>the interleaving, a shader"}}
     end
 
     Screen("<b>Looking Glass's screen</b><br/>behind slanted lenses,<br/>e.g. 1536 x 2048")
 
     Quilt ==> CLI
-    Client == "POST /quilt" ==> Server
+    Client == "/api" ==> Server
     Drive -- "mounted under /media" --> Calibration
     CLI ==> Interleaver
     Server ==> Interleaver
@@ -73,6 +76,12 @@ flowchart TB
     Interleaver == "hologram" ==> DRM
     Viewer == "HDMI" ==> Screen
     DRM == "HDMI" ==> Screen
+    Server <-. "keeps, finds" .-> Library
+    Server ==> Video
+    Server == "quilts" ==> GL
+    Video == "frames" ==> GL
+    Calibration --> GL
+    GL == "HDMI" ==> Screen
 
     classDef human fill:#ffe4e6,stroke:#e11d48,stroke-width:2px,color:#881337
     classDef voice fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#134e4a
@@ -83,15 +92,15 @@ flowchart TB
     classDef ext   fill:#f1f5f9,stroke:#64748b,stroke-width:2px,color:#0f172a
 
     class Client human
-    class Quilt,Cache data
+    class Quilt,Cache,Library data
     class Drive,Screen robot
-    class CLI,Server voice
+    class CLI,Server,Video voice
     class Calibration,Viewer,DRM mind
-    class Interleaver brain
+    class Interleaver,GL brain
 
     style Holo fill:#8b5cf612,stroke:#8b5cf6,stroke-width:1.5px,stroke-dasharray:6 5,color:#7c3aed
 
-    linkStyle 0,1,3,4 stroke:#14b8a6,stroke-width:3px
-    linkStyle 2,5 stroke:#d97706,stroke-width:2px
-    linkStyle 6 stroke:#3b82f6,stroke-width:2px
-    linkStyle 7,8,9,10 stroke:#8b5cf6,stroke-width:3px
+    linkStyle 0,1,3,4,12,13,14 stroke:#14b8a6,stroke-width:3px
+    linkStyle 2,5,15 stroke:#d97706,stroke-width:2px
+    linkStyle 6,11 stroke:#3b82f6,stroke-width:2px
+    linkStyle 7,8,9,10,16 stroke:#8b5cf6,stroke-width:3px
