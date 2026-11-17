@@ -12,7 +12,7 @@ export function medium(fields: Partial<Medium> = {}): Medium {
 
 const BLACK: Display = {
   source: null, media: null, name: null, kind: null, reverse: false, shown: false, shown_on: null, error: null,
-  frame_rate: null, decoder: null, warning: null,
+  frame_rate: null, decoder: null, warning: null, then: null,
 };
 
 export class FakeHoloPiApi implements HoloPiApi {

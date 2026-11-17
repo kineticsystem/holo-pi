@@ -149,6 +149,19 @@ class VideoTest(unittest.TestCase):
         self.assertEqual(player.shown_on, "the fake screen")
         self.assertFalse(player.thread.is_alive() or player.decoder.is_alive())
 
+    def test_plays_one_video_once_then_another_in_a_loop(self):
+        screen = RecordingScreen()
+        once = hologram_video(self.path / "once.mkv", 64, 16, COLOURS[:2])
+        loop = hologram_video(self.path / "loop.mkv", 64, 16, COLOURS[2:])
+        player = Player(once, screen.show, then=(loop, screen.show, None)).start()
+        try:
+            shown = screen.wait_for(8)
+        finally:
+            player.stop()
+        # The first once, then the second again and again, with nothing between them.
+        self.assertEqual(shown[:8], COLOURS[:2] + COLOURS[2:] * 3)
+        self.assertEqual(player.segment, 1)
+
     def test_keeps_the_frame_rate(self):
         screen = RecordingScreen()
         player = Player(hologram_video(self.path / "test.mkv", 64, 16, fps=50), screen.show).start()

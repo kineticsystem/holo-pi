@@ -187,7 +187,8 @@ GET /api/display
   "error": null,
   "frame_rate": 23.4,
   "decoder": "hardware",
-  "warning": null
+  "warning": null,
+  "then": null
 }
 ```
 
@@ -204,6 +205,7 @@ GET /api/display
 | `frame_rate` | A video's frames shown a second, lately: its `fps` when the server keeps up, less when it does not, e.g. when the processor decodes a detailed video, which then plays in slow motion. |
 | `decoder` | What decodes a video: `hardware`, the Pi 5's HEVC decoder, or `software`, the processor. |
 | `warning` | What to change, for a video not in H.265. |
+| `then` | The [medium](#the-medium) to play in a loop once this one has played once, as `PUT /api/display`'s `then` asked; `null` once it plays, and without `then`. |
 
 ### Show a Medium or the Test Pattern
 
@@ -217,17 +219,20 @@ Content-Type: application/json
 | `{"media_id": "8299c881"}` | The library's medium of this id. |
 | `{"media_name": "helix_qs8x6a0.75.mp4"}` | The library's medium of this name. |
 | `{"test_pattern": true}` | The test pattern: 48 views, each showing its number on a colour of its own. Through the lenses, one number fills the screen, and changes in order as we move sideways; a mix of numbers means that the calibration is wrong. With `"reverse": true`, its views in the other order. |
+| `{"media_name": "oops_qs8x6a0.75.mp4", "then": {"media_name": "idle_qs8x6a0.75.mp4"}}` | A video once, then another in a loop, with no gap between them: e.g. a character's one-off gesture, then its idle loop. `then` takes `media_id` or `media_name`; both must be videos. |
 
 The server shows a quilt, or plays a video in a loop, at its frame rate, and answers with [what is shown](#what-is-shown) once it is on the Looking Glass, a video's first frame too: on a Raspberry Pi 5, about 0.8 seconds for a quilt of 3360 x 3360, about 0.2 seconds for a video, as nothing is uploaded. It stays, also after a restart, until something else replaces it.
 
 | Status | When | Body |
 |---|---|---|
 | `200` | It is on the Looking Glass. | [What is shown](#what-is-shown). |
-| `400` | Not one of `media_id`, `media_name` and `test_pattern`. | An [error](#errors). |
+| `400` | Not one of `media_id`, `media_name` and `test_pattern`; `then` without one of `media_id` and `media_name`, after the test pattern, or with a quilt. | An [error](#errors). |
 | `404` | No medium of this id or name. | An [error](#errors). |
 | `503` | It cannot be shown yet: no Looking Glass found, or no screen of its size. | An [error](#errors). It is kept, and shown as soon as it can be. |
 
 A `503` is not a failure to retry: the server tries again by itself every 5 seconds, until it is shown or something else replaces it. `GET /api/display` says when it is shown.
+
+With `then`, the server decodes the second video while the first is still shown, so that it follows its last frame at once, and `GET /api/display` names the video on the screen: the first, with the second in `then`, then the second, with `then` null. After a restart, the second plays.
 
 ### Show Black
 

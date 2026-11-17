@@ -22,7 +22,7 @@ except ImportError as error:  # The server's packages are optional.
 from test_holo_pi import VISUAL, numbered_quilt
 
 try:
-    from test_video import hologram_video, quilt_video
+    from test_video import COLOURS, hologram_video, quilt_video
 
     from holo_pi.video import NoPyAV
 except unittest.SkipTest:  # No PyAV: no videos.
@@ -380,6 +380,8 @@ class VideoTest(ApiTest):
     def setUpClass(cls):
         cls.files = tempfile.TemporaryDirectory()
         cls.video = hologram_video(Path(cls.files.name) / "test.mkv", 1536, 2048, doubled=True).read_bytes()
+        cls.other = hologram_video(Path(cls.files.name) / "other.mkv", 1536, 2048, list(reversed(COLOURS)),
+                                   doubled=True).read_bytes()
 
     @classmethod
     def tearDownClass(cls):
@@ -402,6 +404,31 @@ class VideoTest(ApiTest):
         # The frames shown a second: how many depends on how fast the computer decodes, in software here.
         self.assertGreater(display["frame_rate"], 0)
         self.assertIn("not H.265 (HEVC)", display["warning"])
+
+    def test_plays_a_video_once_then_another_in_a_loop(self):
+        once = self.upload_video("once.mkv").json()
+        loop = self.upload_video("loop.mkv", self.other).json()
+        response = self.show(media_id=once["id"], then={"media_name": "loop.mkv"})
+        self.assertEqual(response.status_code, 200, response.text)
+        display = response.json()
+        self.assertEqual((display["name"], display["then"]["id"]), ("once.mkv", loop["id"]))
+        # After the first has played once, 4 frames, the second: the display says so, and nothing comes next.
+        wait_for(lambda: self.client.get("/api/display").json()["name"] == "loop.mkv", "the loop")
+        display = self.client.get("/api/display").json()
+        self.assertEqual((display["media"]["id"], display["then"]), (loop["id"], None))
+        self.assertEqual(json.loads((self.state / "shown.json").read_text()), {"id": loop["id"]})
+
+    def test_then_needs_two_videos(self):
+        video = self.upload_video().json()
+        quilt = self.upload(play=False).json()
+        for request, status in [({"media_id": video["id"], "then": {"media_id": quilt["id"]}}, 400),
+                                ({"media_id": quilt["id"], "then": {"media_id": video["id"]}}, 400),
+                                ({"media_id": video["id"], "then": {"media_id": "nope"}}, 404),
+                                ({"media_id": video["id"], "then": {}}, 400),
+                                ({"test_pattern": True, "then": {"media_id": video["id"]}}, 400)]:
+            response = self.show(**request)
+            self.assertEqual(response.status_code, status, (request, response.text))
+            self.assertIn("error", response.json())
 
     def test_refuses_a_hologram_video_of_another_size(self):
         small = Path(self.files.name) / "small.mkv"
