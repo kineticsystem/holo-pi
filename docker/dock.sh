@@ -42,8 +42,8 @@ case "$command" in
         ;;
     start)
         docker compose up --detach
-        echo -e "\nHoloPi is on http://$(hostname -I | awk '{print $1}'):$port"
-        echo "Its API is documented on http://$(hostname -I | awk '{print $1}'):$port/docs"
+        echo -e "\nHoloPi's web page is on http://$(hostname -I | awk '{print $1}'):$port"
+        echo "Its API is documented on http://$(hostname -I | awk '{print $1}'):$port/api/docs"
         echo "Follow the output with ./docker/dock.sh logs"
         ;;
     logs)

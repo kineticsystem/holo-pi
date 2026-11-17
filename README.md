@@ -1,5 +1,7 @@
 # HoloPi
 
+[![CI](https://github.com/kineticsystem/holo-pi/actions/workflows/ci.yml/badge.svg)](https://github.com/kineticsystem/holo-pi/actions/workflows/ci.yml)
+
 ## Table of Contents <!-- omit in toc -->
 
 - [Introduction](#introduction)
