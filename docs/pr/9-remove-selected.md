@@ -1,6 +1,6 @@
 # Remove Several Media in One Go
 
-Branch `remove-selected`.
+Pull request [#9](https://github.com/kineticsystem/holo-pi/pull/9), branch `remove-selected`.
 
 ## Goal
 
