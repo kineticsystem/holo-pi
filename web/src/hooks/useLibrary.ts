@@ -1,5 +1,5 @@
 // The library's view model: the media, the space they take, which one is shown, and the commands to read the list
-// again, remove one, or remove them all. Used by the library panel.
+// again, remove one, several, or them all. Used by the library panel.
 import { useCallback, useEffect, useState } from 'react';
 import { selectShownId } from '../model/holoPiStore';
 import { useHoloPiStore } from '../model/HoloPiStoreContext';
@@ -29,16 +29,21 @@ export function useLibrary() {
     return () => controller.abort();
   }, [refresh]);
 
-  async function remove(id: string) {
+  // One after another: those the server removes leave the list, those it refuses stay, and the page says why.
+  async function removeMany(ids: string[]) {
+    if (ids.length === 0) return;
     setBusy(true);
-    const result = await api.removeMedium(id);
-    setBusy(false);
-    if (!result.ok) {
-      setError(result.error);
-      return;
+    const failures: string[] = [];
+    for (const id of ids) {
+      const result = await api.removeMedium(id);
+      if (result.ok) dispatch({ type: 'mediumRemoved', id });
+      else failures.push(result.error);
     }
-    dispatch({ type: 'mediumRemoved', id });
-    await refreshDisplay();
+    setBusy(false);
+    if (failures.length > 0) {
+      setError(ids.length === 1 ? failures[0] : `${failures.length} of ${ids.length} not removed: ${failures[0]}`);
+    }
+    if (failures.length < ids.length) await refreshDisplay();
   }
 
   async function removeAll() {
@@ -69,7 +74,8 @@ export function useLibrary() {
     busy,
     error,
     refresh: () => refresh(),
-    remove,
+    remove: (id: string) => removeMany([id]),
+    removeMany,
     removeAll,
     contentUrl: api.contentUrl,
   };

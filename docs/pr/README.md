@@ -8,6 +8,7 @@ Each pull request has a notes file here. It keeps what the pull request does not
 |---|---|
 | [5-mermaid-diagrams.md](5-mermaid-diagrams.md) | [#5](https://github.com/kineticsystem/holo-pi/pull/5) Diagrams as SVG images, from Mermaid sources |
 | [6-video-playback.md](6-video-playback.md) | [#6](https://github.com/kineticsystem/holo-pi/pull/6) Videos on the GPU, a library, a REST API and a web page |
+| [remove-selected.md](remove-selected.md) | Remove several media in one go |
 
 ## How to Write One
 

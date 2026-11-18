@@ -236,14 +236,14 @@ The player never takes the lock of `Display`: `Display` stops it, under its lock
 
 ## The Web Page
 
-[`web/`](../web/README.md) is a page to try HoloPi without knowing the API: what the Looking Glass shows, the library, to play, download or remove a medium, and uploads, one file or many, dropped or chosen. It uses the API only, as any client, and links its documentation. React, TypeScript, Vite and pnpm, as the web pages of the StepIt projects, with no other library; it follows the `react-developer` skill:
+[`web/`](../web/README.md) is a page to try HoloPi without knowing the API: what the Looking Glass shows, the library, to play, download or remove a medium, or remove those ticked in one go, and uploads, one file or many, dropped or chosen. It uses the API only, as any client, and links its documentation. React, TypeScript, Vite and pnpm, as the web pages of the StepIt projects, with no other library; it follows the `react-developer` skill:
 
 | Folder | What it holds |
 |---|---|
 | `app/` | `App`, the composition root: the real services, the store, the panels, each in an error boundary, and `useDisplayPolling()`, mounted once. |
 | `model/` | The one store, `holoPiReducer`, with `useReducer` behind a Context: the media, what is shown and the server's status, as the server last said them. Which medium is shown is derived from the display, `selectShownId()`, never copied into the list. |
 | `services/` | `HoloPiApi`, the interface of the API's client, and `makeHttpHoloPiApi()`, the real one: `fetch`, and `XMLHttpRequest` for the uploads, whose progress `fetch` cannot give. Errors are `Result`s, not exceptions. |
-| `hooks/` | The view models: `useLibrary`, `useDisplay`, `useUploads`, a queue that sends the files one after another, each with its progress and stoppable with an `AbortController`, `useServerStatus`, and `usePersistentState`, for the form's last choice, through the keys of `utils/storageKeys.ts`. |
+| `hooks/` | The view models: `useLibrary`, `useSelection`, the media ticked in the library, kept by id and derived from the list, so a medium gone is never selected, `useDisplay`, `useUploads`, a queue that sends the files one after another, each with its progress and stoppable with an `AbortController`, `useServerStatus`, and `usePersistentState`, for the form's last choice, through the keys of `utils/storageKeys.ts`. |
 | `components/` | Components that know only their props: the media table, the drop zone, the upload's form and queue, the display's card, a button that asks twice. |
 | `features/` | The panels, each a hook and its components: the header, with the link to `/api/docs`, the display, the upload and the library. |
 | `test/` | The fake API, in memory, and the wrapper that renders with it. |
@@ -277,7 +277,7 @@ The page asks what the Looking Glass shows every 2 seconds, `useDisplayPolling()
 | `QuiltVideoTest`, in [`test_server.py`](../tests/test_server.py) | Quilt videos and the GPU's screen: a quilt video interleaved by the processor without a GPU, handed to a fake GPU screen as YUV frames with its layout, a quilt handed to it too, the layout from the fields, a video without a layout taken for a hologram video, and the last quilt video after a restart. Skipped without PyAV. |
 | `GlTest`, in [`test_gl.py`](../tests/test_gl.py) | The GPU's interleaving, off screen, against the processor's: a quilt, its views reversed, another layout, a video frame in YUV, a hologram copied as it is, RGB and XRGB, a quilt larger than the GPU takes, and black. Skipped without EGL and OpenGL ES 3. |
 
-`pnpm test`, in `web/`, runs the web page's tests, with Vitest and Testing Library, against the fake API: the store, the formatting, the hooks `useLibrary` and `useUploads`, the queue's order, failures and stops, and the components, the media table, the upload's form, its drop zone and its queue.
+`pnpm test`, in `web/`, runs the web page's tests, with Vitest and Testing Library, against the fake API: the store, the formatting, the hooks `useLibrary`, `useSelection` and `useUploads`, the queue's order, failures and stops, and the components, the media table, the upload's form, its drop zone and its queue.
 
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs both on every push and pull request: the Python tests in Debian 13 with Debian's packages, where Mesa's llvmpipe runs `GlTest` on the processor, the diagrams' check, the web page's type check, tests and build, and the build of the image, for amd64.
 

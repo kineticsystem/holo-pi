@@ -39,3 +39,23 @@ test('a medium that is gone cannot be played, and the page says why', async () =
   await act(() => result.current.display.play('gone'));
   expect(result.current.display.error).toBe("no quilt or video of the id 'gone'");
 });
+
+test('removing several takes them all from the list, the one shown too', async () => {
+  const result = setUp(new FakeHoloPiApi([medium({ id: 'a' }), medium({ id: 'b' }), medium({ id: 'c' })]));
+  await waitFor(() => expect(result.current.library.media).not.toBeNull());
+  await act(() => result.current.display.play('c'));
+  await act(() => result.current.library.removeMany(['a', 'c']));
+  expect(result.current.library.media?.map(m => m.id)).toEqual(['b']);
+  expect(result.current.library.shownId).toBeNull();
+  expect(result.current.library.error).toBeNull();
+});
+
+test('a removal refused keeps that medium, removes the others, and says why', async () => {
+  const api = new FakeHoloPiApi([medium({ id: 'a' }), medium({ id: 'b' }), medium({ id: 'c' })]);
+  api.refusing.add('b');
+  const result = setUp(api);
+  await waitFor(() => expect(result.current.library.media).not.toBeNull());
+  await act(() => result.current.library.removeMany(['a', 'b', 'c']));
+  expect(result.current.library.media?.map(m => m.id)).toEqual(['b']);
+  expect(result.current.library.error).toBe('1 of 3 not removed: cannot remove b');
+});

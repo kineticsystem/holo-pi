@@ -4,13 +4,15 @@ import { expect, test, vi } from 'vitest';
 import { medium } from '../test/FakeHoloPiApi';
 import { MediaTable } from './MediaTable';
 
-function setUp(shownId: string | null = null) {
+function setUp(shownId: string | null = null, selected: string[] = []) {
   const onPlay = vi.fn();
   const onRemove = vi.fn();
+  const onSelect = vi.fn();
+  const onSelectAll = vi.fn();
   render(<MediaTable media={[medium({ id: 'a', name: 'helix_qs8x6a0.75.mp4' }), medium({ id: 'b', name: 'old.mp4', codec: 'h264', warning: 'not H.265' })]}
-                     shownId={shownId} disabled={false} contentUrl={id => `/api/media/${id}/content`}
-                     onPlay={onPlay} onRemove={onRemove} />);
-  return { onPlay, onRemove };
+                     shownId={shownId} selected={selected} disabled={false} contentUrl={id => `/api/media/${id}/content`}
+                     onPlay={onPlay} onRemove={onRemove} onSelect={onSelect} onSelectAll={onSelectAll} />);
+  return { onPlay, onRemove, onSelect, onSelectAll };
 }
 
 test('play reports the medium', async () => {
@@ -39,6 +41,23 @@ test('downloads come from the server', () => {
 });
 
 test('an empty library says how to fill it', () => {
-  render(<MediaTable media={[]} shownId={null} disabled={false} contentUrl={() => ''} onPlay={() => {}} onRemove={() => {}} />);
+  render(<MediaTable media={[]} shownId={null} selected={[]} disabled={false} contentUrl={() => ''}
+                     onPlay={() => {}} onRemove={() => {}} onSelect={() => {}} onSelectAll={() => {}} />);
   expect(screen.getByText(/upload a quilt or a video/)).toBeInTheDocument();
+});
+
+test('ticking a medium reports it, and unticking it too', async () => {
+  const { onSelect } = setUp(null, ['b']);
+  await userEvent.click(screen.getByRole('checkbox', { name: 'Select helix_qs8x6a0.75.mp4' }));
+  expect(onSelect).toHaveBeenCalledWith('a', true);
+  await userEvent.click(screen.getByRole('checkbox', { name: 'Select old.mp4' }));
+  expect(onSelect).toHaveBeenCalledWith('b', false);
+});
+
+test('the header box selects all, and shows a part selected', async () => {
+  const { onSelectAll } = setUp(null, ['b']);
+  const all = screen.getByRole('checkbox', { name: 'Select all' });
+  expect(all).toHaveProperty('indeterminate', true);
+  await userEvent.click(all);
+  expect(onSelectAll).toHaveBeenCalledWith(true);
 });
