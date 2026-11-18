@@ -47,6 +47,7 @@ table.media td { border-bottom: 1px solid var(--line); padding: 0.45rem 0.4rem; 
 table.media tr.shown td { background: #17303b; }
 table.media .id { color: var(--muted); font-family: ui-monospace, monospace; font-size: 0.8rem; }
 table.media .actions { white-space: nowrap; display: flex; gap: 0.4rem; justify-content: flex-end; }
+table.media .select { width: 1.6rem; }
 .badge { white-space: nowrap; margin-left: 0.5rem; font-size: 0.75rem; border: 1px solid var(--accent); color: var(--accent); border-radius: 10px; padding: 0 0.45rem; }
 .badge.warning { border-color: var(--warm); color: var(--warm); }
 .dropzone { display: grid; gap: 0.2rem; justify-items: center; padding: 1.4rem 1rem; border: 2px dashed var(--line); border-radius: 8px; color: var(--muted); cursor: pointer; text-align: center; }

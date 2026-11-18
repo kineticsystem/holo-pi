@@ -24,6 +24,8 @@ export class FakeHoloPiApi implements HoloPiApi {
   holdUploads = false;
   /** The names of the files that fail, the others going in. */
   failing = new Set<string>();
+  /** The ids of the media whose removal fails, the others going. */
+  refusing = new Set<string>();
   private pending: (() => void)[] = [];
   readonly docsUrl = '/api/docs';
 
@@ -70,6 +72,7 @@ export class FakeHoloPiApi implements HoloPiApi {
   }
 
   removeMedium(id: string): Promise<Result<void>> {
+    if (this.refusing.has(id)) return Promise.resolve(err(`cannot remove ${id}`));
     this.media = this.media.filter(m => m.id !== id);
     if (this.display.media?.id === id) this.display = BLACK;
     return this.answer(undefined);
