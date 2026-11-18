@@ -1,6 +1,6 @@
 # Darker Quilts, without Spheres
 
-Branch `darker-quilts`.
+Pull request [#11](https://github.com/kineticsystem/holo-pi/pull/11), branch `darker-quilts`.
 
 ## Goal
 
