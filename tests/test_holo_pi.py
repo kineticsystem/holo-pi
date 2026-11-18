@@ -86,7 +86,7 @@ class CalibrationTest(unittest.TestCase):
 
 class LayoutTest(unittest.TestCase):
     def test_reads_the_layout_from_the_name(self):
-        self.assertEqual(Layout.from_name("spheres_qs8x6a0.75.jpg"), Layout(8, 6))
+        self.assertEqual(Layout.from_name("helix_qs8x6a0.75.jpg"), Layout(8, 6))
         self.assertEqual(Layout.from_name("/a/b/sample_qs7x11a1.8.png"), Layout(7, 11))
         self.assertEqual(Layout.from_name("x_qs5x9.png"), Layout(5, 9))
         self.assertIsNone(Layout.from_name("spheres.jpg"))
@@ -255,7 +255,7 @@ class CommandLineTest(unittest.TestCase):
         self.assertIn("Showing on a screen of 1536 x 2048", output)
 
     def test_the_demo_quilt_is_a_portrait_quilt(self):
-        demo = HERE.parent / "quilts" / "spheres_qs8x6a0.75.jpg"
+        demo = HERE.parent / "quilts" / "helix_qs8x6a0.75.jpg"
         self.assertEqual(Layout.from_name(demo), PORTRAIT)
         self.assertEqual(Image.open(demo).size, (3360, 3360))
 

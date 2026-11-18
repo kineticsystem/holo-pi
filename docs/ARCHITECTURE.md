@@ -290,7 +290,7 @@ Checked by hand:
 | The desktop | `holo-pi numbers`: one number through the lenses, changing in order. On a desktop with another monitor, the window must go to the Looking Glass, not the main monitor. |
 | DRM/KMS | `holo-pi numbers --screen drm` on a computer without a desktop: the same, and the console back after Ctrl+C. |
 | The GPU | `holo-pi numbers --screen gl` on a Pi without a desktop: the same, through the GPU. |
-| The server | `holo-pi serve`, then `curl -F file=@quilts/spheres_qs8x6a0.75.jpg -F play=true http://localhost:8095/api/media`; unplug the Looking Glass's HDMI, upload again, plug it in: the quilt shows within 5 seconds. |
+| The server | `holo-pi serve`, then `curl -F file=@quilts/helix_qs8x6a0.75.jpg -F play=true http://localhost:8095/api/media`; unplug the Looking Glass's HDMI, upload again, plug it in: the quilt shows within 5 seconds. |
 | The container | `./docker/dock.sh start` on a Raspberry Pi without a desktop, an upload from another computer, then a reboot of the Pi: the same quilt comes back. |
 | The videos | `curl -F file=@quilts/helix_qs8x6a0.75.mp4 -F play=true http://holo.local:8095/api/media`: it plays smoothly, in depth, and starts again without a pause; `GET /api/display` gives a `frame_rate` near 24 and `decoder` `hardware`. The same with one of the Portrait's own videos, from its drive. Then a quilt: the video stops, and `docker stats` shows the server idle. |
 | The interleaving | `holo-pi show` with a quilt that looks right with Looking Glass's own software on another computer. |
