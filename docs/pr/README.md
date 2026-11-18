@@ -9,6 +9,7 @@ Each pull request has a notes file here. It keeps what the pull request does not
 | [5-mermaid-diagrams.md](5-mermaid-diagrams.md) | [#5](https://github.com/kineticsystem/holo-pi/pull/5) Diagrams as SVG images, from Mermaid sources |
 | [6-video-playback.md](6-video-playback.md) | [#6](https://github.com/kineticsystem/holo-pi/pull/6) Videos on the GPU, a library, a REST API and a web page |
 | [9-remove-selected.md](9-remove-selected.md) | [#9](https://github.com/kineticsystem/holo-pi/pull/9) Remove several media in one go |
+| [10-revert-play-then.md](10-revert-play-then.md) | [#10](https://github.com/kineticsystem/holo-pi/pull/10) Revert of #8, a video once, then another in a loop |
 
 ## How to Write One
 

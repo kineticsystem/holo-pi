@@ -40,8 +40,6 @@ export type Display = {
   frame_rate: number | null;
   decoder: 'hardware' | 'software' | null;
   warning: string | null;
-  /** The video to play in a loop once this one has played once. */
-  then: Medium | null;
 };
 
 export type ServerStatus = {
