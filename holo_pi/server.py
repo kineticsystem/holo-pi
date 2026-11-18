@@ -76,7 +76,7 @@ def state_folder():
 
 @dataclass
 class Quilt:
-    name: str  # As uploaded, e.g. spheres_qs8x6a0.75.jpg, or "numbers" for the test quilt.
+    name: str  # As uploaded, e.g. helix_qs8x6a0.75.jpg, or "numbers" for the test quilt.
     columns: int
     rows: int
     reverse: bool
@@ -703,7 +703,7 @@ def create_app(display, web=None):
                          **error(501, "A video, and the server has no PyAV, python3-av.")})
     def upload_media(
         response: Response,
-        file: UploadFile = File(description="The quilt, an image, e.g. spheres_qs8x6a0.75.jpg; the quilt video, "
+        file: UploadFile = File(description="The quilt, an image, e.g. helix_qs8x6a0.75.jpg; the quilt video, "
                                             "e.g. helix_qs8x6a0.75.mp4; or the hologram video, of the screen's "
                                             "size or twice as wide, e.g. Anna.jpg__lkgrec.mp4. HEVC plays best."),
         columns: Optional[int] = Form(None, ge=1, description="Its columns of views, if its name does not say, "

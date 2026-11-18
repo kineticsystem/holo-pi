@@ -86,7 +86,7 @@ def main(argv=None):
 
     def common(command, quilt=True):
         if quilt:
-            command.add_argument("quilt", type=Path, help="the quilt, e.g. spheres_qs8x6a0.75.jpg")
+            command.add_argument("quilt", type=Path, help="the quilt, e.g. helix_qs8x6a0.75.jpg")
             command.add_argument("--columns", type=int, help="the quilt's columns, if its name does not say")
             command.add_argument("--rows", type=int, help="the quilt's rows, if its name does not say")
         command.add_argument("--calibration", type=Path,
@@ -120,7 +120,7 @@ def main(argv=None):
                              "default: ~/.local/state/holo-pi")
     server.add_argument("--default-quilt", metavar="QUILT",
                         help="what to show when no quilt is kept, e.g. at the first start: numbers, the test "
-                             "quilt, or a quilt file whose name gives its layout, e.g. quilts/spheres_qs8x6a0.75.jpg")
+                             "quilt, or a quilt file whose name gives its layout, e.g. quilts/helix_qs8x6a0.75.jpg")
     server.add_argument("--mount-drive", action="store_true",
                         help="mount the Looking Glass's drive, read-only, if nothing has, e.g. without a desktop; "
                              "needs root")

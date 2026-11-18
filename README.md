@@ -35,7 +35,7 @@
 HoloPi turns a Raspberry Pi into a network display for the **Looking Glass Portrait**, Looking Glass Factory's 7.9" 3D display. Plug the Portrait into the Pi, and any computer on the network shows a hologram on it with one HTTP request, or from the Pi's web page:
 
 ```bash
-curl -F file=@spheres_qs8x6a0.75.jpg -F play=true http://holo.local:8095/api/media
+curl -F file=@helix_qs8x6a0.75.jpg -F play=true http://holo.local:8095/api/media
 ```
 
 The hologram is a quilt, the format of Looking Glass's still holograms: one image holding a grid of views of a scene, each seen from a slightly different direction, 48 views in 8 columns and 6 rows for the Portrait. It works with any quilt, from any software that makes them: a render, a photo session, a script. On the Pi, HoloPi:
@@ -165,16 +165,16 @@ It is for trying things at once, without knowing the API. Everything it does goe
 
 ### Show a Quilt
 
-From any computer on the network, with `curl`, e.g. the repo's sample quilt, [`quilts/spheres_qs8x6a0.75.jpg`](quilts/spheres_qs8x6a0.75.jpg), shiny spheres above a checkered floor, rendered from 48 angles by [`quilts/make_spheres.py`](quilts/make_spheres.py):
+From any computer on the network, with `curl`, e.g. the repo's sample quilt, [`quilts/helix_qs8x6a0.75.jpg`](quilts/helix_qs8x6a0.75.jpg), a double helix of shiny beads above a checkered floor, rendered from 48 angles by [`quilts/make_assets.py`](quilts/make_assets.py):
 
 ```bash
-curl -F file=@quilts/spheres_qs8x6a0.75.jpg -F play=true http://holo.local:8095/api/media
+curl -F file=@quilts/helix_qs8x6a0.75.jpg -F play=true http://holo.local:8095/api/media
 ```
 
 The Pi keeps it in its library, shows it, and answers with what it kept, `201 Created`:
 
 ```json
-{"id": "b44ef8ba", "name": "spheres_qs8x6a0.75.jpg", "kind": "quilt", "size": 1611380,
+{"id": "b44ef8ba", "name": "helix_qs8x6a0.75.jpg", "kind": "quilt", "size": 2979997,
  "uploaded": "2026-11-17T13:20:01+00:00", "width": 3360, "height": 3360, "columns": 8, "rows": 6,
  "reverse": false, "fps": null, "frames": null, "duration": null, "codec": null, "warning": null, "shown": true}
 ```
@@ -192,7 +192,7 @@ From Python, with `requests`:
 ```python
 import requests
 
-with open("spheres_qs8x6a0.75.jpg", "rb") as quilt:
+with open("helix_qs8x6a0.75.jpg", "rb") as quilt:
     response = requests.post("http://holo.local:8095/api/media", files={"file": quilt}, data={"play": "true"},
                              timeout=60)
 response.raise_for_status()
@@ -204,7 +204,7 @@ print(response.json()["id"])
 Every upload stays on the Pi, in its library, until it is removed: without `play`, an upload is only kept, and what the Looking Glass shows does not change. Show one later by its id or its name, at once, with nothing sent but its name:
 
 ```bash
-curl -X PUT -H "Content-Type: application/json" -d '{"media_name": "spheres_qs8x6a0.75.jpg"}' http://holo.local:8095/api/display
+curl -X PUT -H "Content-Type: application/json" -d '{"media_name": "helix_qs8x6a0.75.jpg"}' http://holo.local:8095/api/display
 ```
 
 On a Pi 5, a quilt is on the Looking Glass about 0.8 seconds later, a video about 0.2 seconds later, where uploading a 120 MB video takes about 2.5 seconds over gigabit Ethernet. An upload of a name the library has replaces it, and keeps its id.
@@ -291,7 +291,7 @@ Two environment variables of `start` change the server:
 | Variable | Default | What it is |
 |---|---|---|
 | `HOLO_PI_PORT` | `8095` | The port. |
-| `HOLO_PI_DEFAULT_QUILT` | `numbers` | What to show when nothing is kept: `numbers`, the test pattern, or a quilt of the repo by its path, e.g. `quilts/spheres_qs8x6a0.75.jpg`. |
+| `HOLO_PI_DEFAULT_QUILT` | `numbers` | What to show when nothing is kept: `numbers`, the test pattern, or a quilt of the repo by its path, e.g. `quilts/helix_qs8x6a0.75.jpg`. |
 
 The container is privileged and runs as root, which setting the screen's mode and mounting the Portrait's drive need. It mounts the drive itself, read-only, inside the container only. It mounts the Pi's `/dev`, so that the Portrait can be unplugged and plugged in again, and listens on the Pi's network. Its volume, `holo-pi_state`, keeps the library, what was shown last and the tables of the interleaving.
 
@@ -319,7 +319,7 @@ Then, from a checkout, with no installation:
 ```bash
 git clone https://github.com/kineticsystem/holo-pi.git
 cd holo-pi
-./holo-pi show quilts/spheres_qs8x6a0.75.jpg
+./holo-pi show quilts/helix_qs8x6a0.75.jpg
 ```
 
 The hologram fills the Portrait until you press Escape or `q` on its window, or stop the command. The command says `Showing on the monitor at ...` once the window covers the Portrait, and ends without an error on Ctrl+C or `SIGTERM`. `--columns`, `--rows` and `--reverse` work as the fields of an upload, and `./holo-pi numbers` shows the test quilt.
@@ -357,7 +357,7 @@ The options:
 | `--screen` | `auto` | `desktop`, a full-screen window; `drm`, straight on the screen, drawn by the processor; `gl`, straight on the screen, drawn by the GPU, which interleaves the quilts and quilt videos itself, as the container does; `auto`, `drm` if nothing drives the screen, the desktop otherwise. |
 | `--calibration` | the Looking Glass's drive | A copy of `visual.json`. |
 | `--state` | `~/.local/state/holo-pi` | Where the library is kept, and what was shown last, to show it again after a restart. |
-| `--default-quilt` | none | What to show when nothing is kept, e.g. at the first start or after `DELETE /api/display`: `numbers`, the test quilt, or a quilt file whose name gives its layout, e.g. `quilts/spheres_qs8x6a0.75.jpg`. It is shown, not kept: an upload replaces it. |
+| `--default-quilt` | none | What to show when nothing is kept, e.g. at the first start or after `DELETE /api/display`: `numbers`, the test quilt, or a quilt file whose name gives its layout, e.g. `quilts/helix_qs8x6a0.75.jpg`. It is shown, not kept: an upload replaces it. |
 | `--mount-drive` | off | Mounts the Looking Glass's drive, read-only, when nothing has, e.g. without a desktop. Needs root. |
 | `--web` | `$HOLO_PI_WEB`, or `web/dist` | The web page's built files. Without them, `/` leads to the API's documentation. |
 
@@ -376,7 +376,7 @@ While changing it, `pnpm dev` serves it on http://localhost:5177, reloaded at ea
 On a computer with no desktop, `show` and `numbers` draw straight on the screen, as the server does, through DRM/KMS: they set the Looking Glass's own mode, 1536 x 2048 for a Portrait, and give the display controller the hologram, pixel for pixel. They do so by themselves when a graphics card has a connected screen that no other program drives, whatever `DISPLAY` says, e.g. over `ssh -X`; `--screen drm` asks for it:
 
 ```bash
-./holo-pi show quilts/spheres_qs8x6a0.75.jpg --screen drm
+./holo-pi show quilts/helix_qs8x6a0.75.jpg --screen drm
 ```
 
 The command says `Showing on HDMI-A-1 of /dev/dri/card1, 1536 x 2048`, and the hologram stays until Ctrl+C, when the console comes back. Our user must be in the group `video`, which owns `/dev/dri/card*`: Raspberry Pi OS puts the first user in it.
@@ -397,7 +397,7 @@ Or copy its `LKG_calibration/visual.json` once, and give it with `--calibration 
 ### Save a Hologram and See the Calibration
 
 ```bash
-./holo-pi render quilts/spheres_qs8x6a0.75.jpg -o hologram.png
+./holo-pi render quilts/helix_qs8x6a0.75.jpg -o hologram.png
 ```
 
 It saves the image the Looking Glass would show, of the screen's size, e.g. 1536 x 2048, without showing it: it needs no screen. It still needs the calibration: the Looking Glass's drive, or `--calibration visual.json`, a copy of it.
@@ -417,7 +417,7 @@ from PIL import Image
 from holo_pi import Interleaver, Layout, find_calibration
 
 calibration = find_calibration()
-quilt = np.asarray(Image.open("quilts/spheres_qs8x6a0.75.jpg").convert("RGB"))
+quilt = np.asarray(Image.open("quilts/helix_qs8x6a0.75.jpg").convert("RGB"))
 interleaver = Interleaver(calibration, Layout(8, 6), quilt.shape[1], quilt.shape[0])
 hologram = interleaver(quilt)  # An RGB array of the screen's size.
 ```

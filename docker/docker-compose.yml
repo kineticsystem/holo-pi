@@ -53,7 +53,7 @@ services:
       # Nothing else mounts the Looking Glass's drive in the container.
       - --mount-drive
       # Shown when no quilt is kept, e.g. at the first start: numbers, the test
-      # quilt, or a quilt of the mounted repo, e.g. quilts/spheres_qs8x6a0.75.jpg.
+      # quilt, or a quilt of the mounted repo, e.g. quilts/helix_qs8x6a0.75.jpg.
       - --default-quilt
       - "${HOLO_PI_DEFAULT_QUILT:-numbers}"
       - --port

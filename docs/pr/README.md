@@ -10,6 +10,7 @@ Each pull request has a notes file here. It keeps what the pull request does not
 | [6-video-playback.md](6-video-playback.md) | [#6](https://github.com/kineticsystem/holo-pi/pull/6) Videos on the GPU, a library, a REST API and a web page |
 | [9-remove-selected.md](9-remove-selected.md) | [#9](https://github.com/kineticsystem/holo-pi/pull/9) Remove several media in one go |
 | [10-revert-play-then.md](10-revert-play-then.md) | [#10](https://github.com/kineticsystem/holo-pi/pull/10) Revert of #8, a video once, then another in a loop |
+| [11-darker-quilts.md](11-darker-quilts.md) | [#11](https://github.com/kineticsystem/holo-pi/pull/11) Darker quilts: a black sky, a grade, true mirrors, and no spheres |
 
 ## How to Write One
 

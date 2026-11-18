@@ -13,7 +13,8 @@ It needs PyTorch with CUDA, Pillow, and FFmpeg with NVENC, hevc_nvenc. Each scen
 A quilt is 8 x 6 views of 420 x 560, seen by 48 cameras on a line, 35 degrees from the first to the last, with
 off-axis projections that share the screen's rectangle, as Looking Glass's tools render a Portrait's quilts: view
 0 is the camera on the left, at the bottom left of the quilt. The screen is 1.5 x 2 in the scene, in the plane
-z = 0: what is in front of it comes out of the Looking Glass, what is behind goes into it.
+z = 0: what is in front of it comes out of the Looking Glass, what is behind goes into it. The sky is black, and
+every frame is graded, with more contrast and more colour, so that the scenes do not look washed out.
 """
 
 import argparse
@@ -38,6 +39,7 @@ FLOOR_Y = -0.9
 FPS = 24
 PERIOD = 20.0  # Every motion repeats in 20 seconds: the videos loop.
 DEPTH = 2  # Reflections of reflections, at most.
+GRADE = "curves=all='0/0 0.25/0.19 0.5/0.46 0.75/0.79 1/1',eq=saturation=1.25"  # An S-curve and more colour, FFmpeg's.
 device = torch.device("cuda")
 LIGHT = torch.tensor([-0.45, 1.0, 0.6], device=device)
 LIGHT = LIGHT / LIGHT.norm()
@@ -73,7 +75,7 @@ def helix(t):
 def orrery(t):
     """A chrome sun, four planets on tilted orbits at their own speeds, and moons around two of them."""
     sun_y = 0.05 + 0.05 * math.sin(2 * math.pi * 2 * t / PERIOD)
-    spheres = [((0.0, sun_y, 0.0), 0.27, (0.85, 0.85, 0.9), 0.8)]
+    spheres = [((0.0, sun_y, 0.0), 0.27, (0.85, 0.85, 0.9), 1.0)]
     planets = [(0.42, 0.3, 3, 0.07, 0.6), (0.55, -0.25, -2, 0.09, 0.08), (0.66, 0.15, 1, 0.11, 0.33),
                (0.5, 0.55, 4, 0.06, 0.85)]
     for index, (radius, tilt, turns, size, hue) in enumerate(planets):
@@ -100,7 +102,7 @@ def bounce(t):
         x, z = x * math.cos(turn) - z * math.sin(turn), x * math.sin(turn) + z * math.cos(turn)
         if beat == 0:  # The mirror ball, hovering.
             y = FLOOR_Y + 0.45 + 0.05 * math.sin(2 * math.pi * 3 * t / PERIOD)
-            spheres.append(((x, y, z), 0.19, (0.9, 0.9, 0.95), 0.85))
+            spheres.append(((x, y, z), 0.19, (0.9, 0.9, 0.95), 1.0))
             continue
         phase = (beat * t / PERIOD + index * 0.137) % 1
         y = FLOOR_Y + 0.11 + 1.1 * 4 * phase * (1 - phase) * (0.55 + 0.05 * index)  # A parabola per bounce.
@@ -150,10 +152,8 @@ def hit_spheres(origin, direction, scene, group=8):
 
 
 def background(direction):
-    up = direction[:, 1:2].clamp(-0.3, 1.0)
-    low = torch.tensor([0.05, 0.05, 0.1], device=device)
-    high = torch.tensor([0.16, 0.12, 0.26], device=device)
-    return low + (high - low) * (up + 0.3) / 1.3
+    """The sky, black: the scene floats in the dark, and a mirror shows only what is around it."""
+    return torch.zeros_like(direction)
 
 
 def shade(origin, direction, scene, depth=0):
@@ -171,7 +171,7 @@ def shade(origin, direction, scene, depth=0):
         p = o + d * floor_d[on_floor, None]
         checker = ((torch.floor(p[:, 0] * 2.5) + torch.floor(p[:, 2] * 2.5)) % 2)[:, None]
         base = torch.where(checker > 0, torch.tensor([0.8, 0.8, 0.78], device=device),
-                           torch.tensor([0.12, 0.13, 0.18], device=device))
+                           torch.tensor([0.12, 0.12, 0.12], device=device))
         shadow, _ = hit_spheres(p + torch.tensor([0, 1e-3, 0], device=device), LIGHT.expand_as(p), scene)
         lit = torch.where(torch.isfinite(shadow), 0.3, 1.0)[:, None]
         surface = base * (0.25 + 0.75 * LIGHT[1] * lit)
@@ -238,6 +238,15 @@ def render_quilt(make_scene, t, cameras, directions):
     return quilt.cpu().numpy()
 
 
+def graded(image):
+    """An RGB image through GRADE, as the video's frames go."""
+    h, w = image.shape[:2]
+    out = subprocess.run(["ffmpeg", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}", "-i", "-",
+                          "-vf", GRADE, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                         input=np.ascontiguousarray(image).tobytes(), capture_output=True, check=True).stdout
+    return np.frombuffer(out, np.uint8).reshape(h, w, 3)
+
+
 def make(name, seconds):
     cameras, directions = rays()
     stem = HERE / f"{name}_qs8x6a0.75"
@@ -245,17 +254,18 @@ def make(name, seconds):
     size = f"{COLUMNS * VIEW_W}x{ROWS * VIEW_H}"
     ffmpeg = subprocess.Popen(
         ["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", size, "-r", str(FPS),
-         "-i", "-", "-c:v", "hevc_nvenc", "-preset", "p7", "-tune", "hq", "-rc", "vbr", "-cq", "20", "-b:v", "0",
-         "-pix_fmt", "yuv420p", "-tag:v", "hvc1", "-movflags", "+faststart", f"{stem}.mp4"], stdin=subprocess.PIPE)
+         "-i", "-", "-vf", GRADE, "-c:v", "hevc_nvenc", "-preset", "p7", "-tune", "hq", "-rc", "vbr", "-cq", "20",
+         "-b:v", "0", "-pix_fmt", "yuv420p", "-tag:v", "hvc1", "-movflags", "+faststart", f"{stem}.mp4"],
+        stdin=subprocess.PIPE)
     start = time.perf_counter()
     for n in range(frames):
         quilt = render_quilt(SCENES[name], n / FPS, cameras, directions)
         if n == 0:
-            Image.fromarray(quilt).save(f"{stem}.jpg", quality=92)
+            Image.fromarray(graded(quilt)).save(f"{stem}.jpg", quality=92)
             middle = VIEWS // 2
             row, column = ROWS - 1 - middle // COLUMNS, middle % COLUMNS
-            Image.fromarray(quilt[row * VIEW_H:(row + 1) * VIEW_H, column * VIEW_W:(column + 1) * VIEW_W]).save(
-                HERE / f"{name}_preview.png")
+            view = quilt[row * VIEW_H:(row + 1) * VIEW_H, column * VIEW_W:(column + 1) * VIEW_W]
+            Image.fromarray(graded(view)).save(HERE / f"{name}_preview.png")
         ffmpeg.stdin.write(quilt.tobytes())
         if n % FPS == 0:
             print(f"{name}: frame {n}/{frames}, {time.perf_counter() - start:.0f} s", flush=True)

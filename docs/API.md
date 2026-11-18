@@ -306,7 +306,7 @@ Every error has the same body, with what went wrong and what to check:
 
 ```bash
 # Upload a quilt, its layout in its name, and show it at once.
-curl -F file=@spheres_qs8x6a0.75.jpg -F play=true http://holo.local:8095/api/media
+curl -F file=@helix_qs8x6a0.75.jpg -F play=true http://holo.local:8095/api/media
 
 # Upload a quilt video without showing it, then show it by its name.
 curl -F file=@helix_qs8x6a0.75.mp4 http://holo.local:8095/api/media
