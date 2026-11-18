@@ -1,6 +1,6 @@
 # Revert: Play a Video Once, Then Another in a Loop
 
-Branch `revert-play-then`.
+Pull request [#10](https://github.com/kineticsystem/holo-pi/pull/10), branch `revert-play-then`.
 
 ## Goal
 
