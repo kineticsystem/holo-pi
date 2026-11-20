@@ -1,28 +1,51 @@
-// The library's media, one row each, with what they are, buttons to play, download and remove them, and a box to tick
-// each, to remove several in one go.
+// The library's media, one row each, with what they are, buttons to download and remove them, and a box to tick
+// each, to remove several in one go. A click on a row shows its medium, and the arrow keys show the one above or below.
+import type { KeyboardEvent, MouseEvent } from 'react';
 import type { Medium } from '../services/HoloPiApi';
 import { formatBytes, formatDuration, formatLayout, formatTime } from '../utils/formatUtils';
+import { stepThrough } from '../utils/listUtils';
 import { ConfirmButton } from './ConfirmButton';
 
 type MediaTableProps = {
   media: Medium[];
   shownId: string | null;
+  /** The row the arrow keys go on from: the medium asked for last, or the one on the screen. */
+  currentId: string | null;
   selected: string[];
   disabled: boolean;
   contentUrl: (id: string) => string;
-  onPlay: (id: string) => void;
+  onShow: (id: string) => void;
   onRemove: (id: string) => void;
   onSelect: (id: string, on: boolean) => void;
   onSelectAll: (on: boolean) => void;
 };
 
-export function MediaTable({ media, shownId, selected, disabled, contentUrl, onPlay, onRemove, onSelect,
+const STEPS: Record<string, 1 | -1> = { ArrowDown: 1, ArrowUp: -1 };
+
+export function MediaTable({ media, shownId, currentId, selected, disabled, contentUrl, onShow, onRemove, onSelect,
                             onSelectAll }: MediaTableProps) {
   if (media.length === 0) return <p className="empty">The library is empty: upload a quilt or a video.</p>;
   const allSelected = selected.length === media.length;
   const someSelected = selected.length > 0 && !allSelected;
+
+  function handleKeyDown(event: KeyboardEvent<HTMLTableElement>) {
+    const step = STEPS[event.key];
+    if (!step) return;
+    event.preventDefault();  // The arrows move through the rows, not the page.
+    const id = stepThrough(media.map(medium => medium.id), currentId, step);
+    if (id === null || id === currentId) return;
+    onShow(id);
+    event.currentTarget.querySelector(`tr[data-id="${id}"]`)?.scrollIntoView?.({ block: 'nearest' });
+  }
+
+  function handleRowClick(event: MouseEvent<HTMLTableRowElement>, id: string) {
+    if ((event.target as HTMLElement).closest('input, a, button')) return;  // The row's own controls do their own job.
+    onShow(id);
+  }
+
   return (
-    <table className="media">
+    <table className="media" tabIndex={0} aria-label="Library: click a row or use the arrow keys to show it"
+           onKeyDown={handleKeyDown}>
       <thead>
         <tr>
           <th className="select">
@@ -35,7 +58,9 @@ export function MediaTable({ media, shownId, selected, disabled, contentUrl, onP
       </thead>
       <tbody>
         {media.map(medium => (
-          <tr key={medium.id} className={medium.id === shownId ? 'shown' : undefined}>
+          <tr key={medium.id} data-id={medium.id} aria-current={medium.id === currentId ? 'true' : undefined}
+              className={[medium.id === shownId && 'shown', medium.id === currentId && 'current'].filter(Boolean).join(' ')}
+              onClick={event => handleRowClick(event, medium.id)}>
             <td className="select">
               <input type="checkbox" aria-label={`Select ${medium.name}`} checked={selected.includes(medium.id)}
                      disabled={disabled} onChange={event => onSelect(medium.id, event.target.checked)} />
@@ -53,7 +78,6 @@ export function MediaTable({ media, shownId, selected, disabled, contentUrl, onP
             <td>{formatTime(medium.uploaded)}</td>
             <td>
               <div className="actions">
-                <button className="primary" disabled={disabled} onClick={() => onPlay(medium.id)}>Play</button>
                 <a className="button" href={contentUrl(medium.id)} download={medium.name}>Download</a>
                 <ConfirmButton label="Remove" confirmLabel="Remove it" disabled={disabled}
                                onConfirm={() => onRemove(medium.id)} />

@@ -44,7 +44,12 @@ label.check { display: flex; align-items: center; gap: 0.4rem; }
 table.media { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
 table.media th { text-align: left; color: var(--muted); font-weight: normal; border-bottom: 1px solid var(--line); padding: 0.4rem; }
 table.media td { border-bottom: 1px solid var(--line); padding: 0.45rem 0.4rem; vertical-align: top; }
-table.media tr.shown td { background: #17303b; }
+table.media tbody tr { cursor: pointer; }
+table.media tbody tr:hover td { background: #222833; }
+table.media tbody tr.shown td { background: #17303b; }
+table.media tbody tr.current td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+table.media:focus { outline: none; }
+table.media:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
 table.media .id { color: var(--muted); font-family: ui-monospace, monospace; font-size: 0.8rem; }
 table.media .actions { white-space: nowrap; display: flex; gap: 0.4rem; justify-content: flex-end; }
 table.media .select { width: 1.6rem; }

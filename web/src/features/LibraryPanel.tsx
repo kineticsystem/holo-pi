@@ -1,5 +1,5 @@
-// The library: the media kept on the Raspberry Pi, to play, download or remove, one, those ticked or all, and the
-// space left.
+// The library: the media kept on the Raspberry Pi, to show with a click or the arrow keys, to download or remove, one,
+// those ticked or all, and the space left.
 import { ConfirmButton } from '../components/ConfirmButton';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { MediaTable } from '../components/MediaTable';
@@ -28,9 +28,9 @@ export function LibraryPanel() {
                        onConfirm={() => void library.removeAll()} />
       </p>
       {library.loading ? <p className="empty">Asking the server…</p> : (
-        <MediaTable media={library.media ?? []} shownId={library.shownId}
+        <MediaTable media={library.media ?? []} shownId={library.shownId} currentId={display.wanted ?? library.shownId}
                     selected={selection.selected} disabled={library.busy || display.pending}
-                    contentUrl={library.contentUrl} onPlay={id => void display.play(id)}
+                    contentUrl={library.contentUrl} onShow={id => void display.show(id)}
                     onRemove={id => void library.remove(id)} onSelect={selection.toggle}
                     onSelectAll={selection.selectAll} />
       )}
