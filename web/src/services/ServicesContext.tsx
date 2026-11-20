@@ -4,8 +4,6 @@ import type { HoloPiApi } from './HoloPiApi';
 
 export type Services = {
   api: HoloPiApi;
-  /** The browser's storage, or an in-memory one in the tests. */
-  storage: Pick<Storage, 'getItem' | 'setItem'>;
 };
 
 const ServicesContext = createContext<Services | null>(null);

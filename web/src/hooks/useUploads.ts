@@ -1,9 +1,9 @@
 // The uploads' view model: a queue of files, sent to the library one after another, each with its progress, which
-// cancel() stops; a file that fails does not stop the next. Each file in is put in the list. Used by the upload
-// panel.
+// cancel() stops; a file that fails does not stop the next. Each file in is put in the list, and the first of those
+// dropped together is shown at once. Used by the upload panel.
 import { useEffect, useRef, useState } from 'react';
 import { useHoloPiStore } from '../model/HoloPiStoreContext';
-import type { Medium, UploadOptions } from '../services/HoloPiApi';
+import type { Medium, UploadLayout, UploadOptions } from '../services/HoloPiApi';
 import { useServices } from '../services/ServicesContext';
 
 export type UploadStatus = 'waiting' | 'sending' | 'done' | 'failed' | 'stopped';
@@ -66,15 +66,18 @@ export function useUploads() {
     void sendNext();
   }
 
-  /** Queues files with the same options; with play, the first is shown, so that something shows at once. */
-  function add(files: File[], options: UploadOptions) {
-    if ((options.columns === null) !== (options.rows === null)) {
+  /**
+   * Queues files with the same layout. The first is shown as soon as it is in, a single file as well as the first of
+   * several: what we upload, we want to see, and showing each of several in turn would end on the last.
+   */
+  function add(files: File[], layout: UploadLayout) {
+    if ((layout.columns === null) !== (layout.rows === null)) {
       setError('Give both columns and rows, or neither.');
       return;
     }
     setError(null);
     const added = files.map((file, index): UploadJob => ({
-      id: nextIdRef.current++, file, options: { ...options, play: options.play && index === 0 },
+      id: nextIdRef.current++, file, options: { ...layout, reverse: false, play: index === 0 },
       status: 'waiting', progress: 0, error: null, medium: null,
     }));
     waitingRef.current.push(...added);

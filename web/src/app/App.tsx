@@ -9,7 +9,7 @@ import { HoloPiStoreProvider } from '../model/HoloPiStoreContext';
 import { makeHttpHoloPiApi } from '../services/httpHoloPiApi';
 import { ServicesProvider, type Services } from '../services/ServicesContext';
 
-const services: Services = { api: makeHttpHoloPiApi(), storage: window.localStorage };
+const services: Services = { api: makeHttpHoloPiApi() };
 
 /** The page's background work, mounted once inside the providers: what the Looking Glass shows, kept fresh. */
 function Background() {
