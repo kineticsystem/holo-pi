@@ -159,7 +159,7 @@ Reboot. The login prompt is only of use with a keyboard and a user with a passwo
 
 The Pi serves a web page, on the same port as its API: http://holo.local:8095, or the Pi's address, e.g. http://192.168.100.41:8095. It shows what the Looking Glass shows, with a video's frame rate and decoder, and the media kept on the Pi: a click on a row shows it, the arrow keys show the one above or below, and each can be downloaded or removed, one, those ticked or all at once; quilts and videos dropped on it, one or many, are uploaded, and the first is shown at once. Its header links the API's documentation.
 
-<p align="center"><img src="docs/images/web-page.png" alt="HoloPi's web page: on the left, what the Looking Glass shows, the helix quilt video at 23.4 of 24 frames per second with the hardware decoder, and the upload, an area to drop files on with their layout; on the right, the library of six quilts and quilt videos, each with Play, Download and Remove." width="700"></p>
+<p align="center"><img src="docs/images/web-page.png" alt="HoloPi's web page: on the left, what the Looking Glass shows, the helix quilt video at 23.2 of 24 frames per second with the hardware decoder, and the upload, an area to drop files on with their layout; on the right, the library of five quilts and quilt videos, each row with a box to tick, Download and Remove, the helix video's row marked on screen." width="700"></p>
 
 It is for trying things at once, without knowing the API. Everything it does goes through the API, which a program uses, as below.
 
