@@ -60,6 +60,9 @@ export type UploadOptions = {
   play: boolean;
 };
 
+/** What the page asks of an upload: its layout only. It always shows the first file and keeps the views' order. */
+export type UploadLayout = Pick<UploadOptions, 'columns' | 'rows'>;
+
 export interface HoloPiApi {
   listMedia(signal?: AbortSignal): Promise<Result<MediaList>>;
   /** Uploads a file, reporting the share sent, 0 to 1; abort() through the signal stops it. */

@@ -39,7 +39,6 @@ dl.display dd { margin: 0; }
 .upload fieldset { border: 1px solid var(--line); border-radius: 6px; display: flex; flex-wrap: wrap; gap: 0.7rem; }
 .upload legend { color: var(--muted); font-size: 0.85rem; }
 .upload input[type=number] { width: 4.5rem; background: #12151a; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 0.2rem; }
-label.check { display: flex; align-items: center; gap: 0.4rem; }
 .totals { display: flex; align-items: center; gap: 0.7rem; color: var(--muted); flex-wrap: wrap; }
 table.media { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
 table.media th { text-align: left; color: var(--muted); font-weight: normal; border-bottom: 1px solid var(--line); padding: 0.4rem; }

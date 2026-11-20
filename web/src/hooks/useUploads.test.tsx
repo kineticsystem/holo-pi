@@ -5,7 +5,7 @@ import { FakeHoloPiApi } from '../test/FakeHoloPiApi';
 import { makeWrapper } from '../test/renderWithServices';
 import { useUploads } from './useUploads';
 
-const options = { columns: null, rows: null, reverse: false, play: false };
+const options = { columns: null, rows: null };
 const file = (name: string) => new File(['quilt'], name);
 
 function setUp(api = new FakeHoloPiApi()) {
@@ -30,11 +30,20 @@ test('several files go in one after another, each into the list', async () => {
   expect(result.current.store.state.media?.map(m => m.name)).toEqual(['a.mp4', 'b.mp4']);
 });
 
-test('with play, only the first is shown', async () => {
+test('a single file is shown at once', async () => {
   const { api, result } = setUp();
-  act(() => result.current.uploads.add([file('a.mp4'), file('b.mp4')], { ...options, play: true }));
+  act(() => result.current.uploads.add([file('a.mp4')], options));
   await waitFor(() => expect(result.current.uploads.busy).toBe(false));
-  expect(api.uploads.map(upload => upload.options.play)).toEqual([true, false]);
+  expect(api.uploads.map(upload => upload.options.play)).toEqual([true]);
+  expect(result.current.store.state.display?.name).toBe('a.mp4');
+});
+
+test('of several, only the first is shown, the others only kept, all with their views in order', async () => {
+  const { api, result } = setUp();
+  act(() => result.current.uploads.add([file('a.mp4'), file('b.mp4'), file('c.mp4')], options));
+  await waitFor(() => expect(result.current.uploads.busy).toBe(false));
+  expect(api.uploads.map(upload => upload.options.play)).toEqual([true, false, false]);
+  expect(api.uploads.every(upload => !upload.options.reverse)).toBe(true);
   expect(result.current.store.state.display?.name).toBe('a.mp4');
 });
 
