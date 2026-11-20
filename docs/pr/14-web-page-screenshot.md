@@ -1,6 +1,6 @@
 # The Web Page's Screenshot
 
-Branch `web-page-screenshot`.
+Pull request [#14](https://github.com/kineticsystem/holo-pi/pull/14), branch `web-page-screenshot`.
 
 ## Goal
 

@@ -13,6 +13,7 @@ Each pull request has a notes file here. It keeps what the pull request does not
 | [11-darker-quilts.md](11-darker-quilts.md) | [#11](https://github.com/kineticsystem/holo-pi/pull/11) Darker quilts: a black sky, a grade, true mirrors, and no spheres |
 | [12-click-to-show.md](12-click-to-show.md) | [#12](https://github.com/kineticsystem/holo-pi/pull/12) Web page: click a row to show it, the arrow keys to go up and down |
 | [13-upload-shows-first.md](13-upload-shows-first.md) | [#13](https://github.com/kineticsystem/holo-pi/pull/13) Uploads always show the first file; no reverse box |
+| [14-web-page-screenshot.md](14-web-page-screenshot.md) | [#14](https://github.com/kineticsystem/holo-pi/pull/14) README: the web page's screenshot as it is now |
 
 ## How to Write One
 
