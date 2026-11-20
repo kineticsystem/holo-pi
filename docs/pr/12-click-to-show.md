@@ -1,6 +1,6 @@
 # Click a Row to Show It
 
-Branch `click-to-show`.
+Pull request [#12](https://github.com/kineticsystem/holo-pi/pull/12), branch `click-to-show`.
 
 ## Goal
 
