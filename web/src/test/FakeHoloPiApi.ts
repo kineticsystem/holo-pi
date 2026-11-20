@@ -27,6 +27,11 @@ export class FakeHoloPiApi implements HoloPiApi {
   /** The ids of the media whose removal fails, the others going. */
   refusing = new Set<string>();
   private pending: (() => void)[] = [];
+  /** The ids showMedium() was asked for, in order. */
+  shows: string[] = [];
+  /** Shows wait for finishShow(), to test what is asked while the screen changes. */
+  holdShows = false;
+  private pendingShows: (() => void)[] = [];
   readonly docsUrl = '/api/docs';
 
   constructor(media: Medium[] = []) {
@@ -89,10 +94,20 @@ export class FakeHoloPiApi implements HoloPiApi {
   }
 
   showMedium(id: string): Promise<Result<Display>> {
-    const found = this.media.find(m => m.id === id);
-    if (!found) return Promise.resolve(err(`no quilt or video of the id '${id}'`));
-    this.display = { ...BLACK, source: 'media', media: found, name: found.name, kind: found.kind, shown: true };
-    return this.answer(this.display);
+    this.shows.push(id);
+    const show = () => {
+      const found = this.media.find(m => m.id === id);
+      if (!found) return Promise.resolve(err(`no quilt or video of the id '${id}'`));
+      this.display = { ...BLACK, source: 'media', media: found, name: found.name, kind: found.kind, shown: true };
+      return this.answer(this.display);
+    };
+    if (!this.holdShows) return show();
+    return new Promise(resolve => this.pendingShows.push(() => void show().then(resolve)));
+  }
+
+  /** Lets the oldest show waiting reach the screen. */
+  finishShow() {
+    this.pendingShows.shift()?.();
   }
 
   showTestPattern(): Promise<Result<Display>> {
