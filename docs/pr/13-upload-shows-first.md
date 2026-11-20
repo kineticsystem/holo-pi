@@ -1,6 +1,6 @@
 # Uploads Always Show the First File
 
-Branch `upload-shows-first`.
+Pull request [#13](https://github.com/kineticsystem/holo-pi/pull/13), branch `upload-shows-first`.
 
 ## Goal
 
