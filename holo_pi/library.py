@@ -11,7 +11,10 @@ what it is:
   Glass, of its screen's size or twice as wide.
 
 A name is unique: an upload of a name the library has replaces that item, and
-keeps its id, so that what refers to it still does.
+keeps its id and its place, so that what refers to it still does.
+
+The items are in an order of their own, that of index.json: a new one goes last,
+and reorder() puts them in another.
 """
 
 import json
@@ -79,7 +82,7 @@ class Library:
     def __init__(self, folder):
         self.folder = Path(folder)
         self.lock = threading.RLock()
-        self.items = {}  # By id, in the order they were added.
+        self.items = {}  # By id, in the library's order.
         self._load()
 
     def _load(self):
@@ -157,8 +160,7 @@ class Library:
             upload.replace(self.folder / file)
             item = Item(id=id, name=name, file=file, size=(self.folder / file).stat().st_size, uploaded=now(),
                         reverse=bool(layout and reverse), **details)
-            self.items.pop(id, None)
-            self.items[id] = item
+            self.items[id] = item  # A replacement keeps its place, a new item goes last.
             self._save()
         log.info("Kept %s, %s, as %s", name, item.kind, id)
         return item
@@ -204,6 +206,22 @@ class Library:
             if self.items.pop(item.id, None) is not None:
                 self.path(item).unlink(missing_ok=True)
                 self._save()
+
+    def reorder(self, ids):
+        """Puts the items in the order of `ids`: each of the library's ids once. Raises KeyError, its message the
+        reason, for an id the library does not have, and ValueError for an id twice or one left out."""
+        with self.lock:
+            for id in ids:
+                if id not in self.items:
+                    raise KeyError(f"no medium of the id {id!r}")
+            if len(set(ids)) != len(ids):
+                raise ValueError("an id is given twice: give each of the library's ids once")
+            if len(ids) != len(self.items):
+                left = [item.name for item in self.items.values() if item.id not in ids]
+                raise ValueError(f"give each of the library's ids once: {', '.join(left)} left out")
+            self.items = {id: self.items[id] for id in ids}
+            self._save()
+            return list(self.items.values())
 
     def _new_id(self):
         while True:

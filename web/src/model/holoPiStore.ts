@@ -14,6 +14,7 @@ export type HoloPiAction =
   | { type: 'mediaListed'; list: MediaList }
   | { type: 'mediumUploaded'; medium: Medium }
   | { type: 'mediumRemoved'; id: string }
+  | { type: 'mediaOrdered'; ids: string[] }
   | { type: 'allMediaRemoved' }
   | { type: 'displayRead'; display: Display }
   | { type: 'statusRead'; status: ServerStatus };
@@ -38,6 +39,13 @@ export function holoPiReducer(state: HoloPiState, action: HoloPiAction): HoloPiS
       const removed = (state.media ?? []).find(medium => medium.id === action.id);
       const media = (state.media ?? []).filter(medium => medium.id !== action.id);
       return { ...state, media, size: state.size - (removed?.size ?? 0), free: state.free + (removed?.size ?? 0) };
+    }
+    case 'mediaOrdered': {
+      // The media in the order of the ids; those not among them, e.g. an upload meanwhile, after them.
+      const media = state.media ?? [];
+      const place = new Map(action.ids.map((id, index) => [id, index]));
+      const ordered = [...media].sort((a, b) => (place.get(a.id) ?? Infinity) - (place.get(b.id) ?? Infinity));
+      return { ...state, media: ordered };
     }
     case 'allMediaRemoved':
       return { ...state, media: [], size: 0, free: state.free + state.size };

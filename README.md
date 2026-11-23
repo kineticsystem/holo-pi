@@ -157,7 +157,7 @@ Reboot. The login prompt is only of use with a keyboard and a user with a passwo
 
 ### The Web Page
 
-The Pi serves a web page, on the same port as its API: http://holo.local:8095, or the Pi's address, e.g. http://192.168.100.41:8095. It shows what the Looking Glass shows, with a video's frame rate and decoder, and the media kept on the Pi: a click on a row shows it, the arrow keys show the one above or below, and each can be downloaded or removed, one, those ticked or all at once; quilts and videos dropped on it, one or many, are uploaded, and the first is shown at once. Its header links the API's documentation.
+The Pi serves a web page, on the same port as its API: http://holo.local:8095, or the Pi's address, e.g. http://192.168.100.41:8095. It shows what the Looking Glass shows, with a video's frame rate and decoder, and the media kept on the Pi: a click on a row shows it, the arrow keys show the one above or below, a row dragged by its grip, ⠿, or moved with Alt and the arrow keys, puts the library in another order, and each can be downloaded or removed, one, those ticked or all at once; quilts and videos dropped on it, one or many, are uploaded, and the first is shown at once. Its header links the API's documentation.
 
 <p align="center"><img src="docs/images/web-page.png" alt="HoloPi's web page: on the left, what the Looking Glass shows, the helix quilt video at 23.2 of 24 frames per second with the hardware decoder, and the upload, an area to drop files on with their layout; on the right, the library of five quilts and quilt videos, each row with a box to tick, Download and Remove, the helix video's row marked on screen." width="700"></p>
 
@@ -207,12 +207,13 @@ Every upload stays on the Pi, in its library, until it is removed: without `play
 curl -X PUT -H "Content-Type: application/json" -d '{"media_name": "helix_qs8x6a0.75.jpg"}' http://holo.local:8095/api/display
 ```
 
-On a Pi 5, a quilt is on the Looking Glass about 0.8 seconds later, a video about 0.2 seconds later, where uploading a 120 MB video takes about 2.5 seconds over gigabit Ethernet. An upload of a name the library has replaces it, and keeps its id.
+On a Pi 5, a quilt is on the Looking Glass about 0.8 seconds later, a video about 0.2 seconds later, where uploading a 120 MB video takes about 2.5 seconds over gigabit Ethernet. An upload of a name the library has replaces it, and keeps its id and its place in the list.
 
 | Request | What it does |
 |---|---|
 | `GET /api/media` | Lists the library, with the space it takes and the space left. |
 | `POST /api/media` | Uploads a quilt or a video into it; with `play=true`, shows it too. |
+| `PUT /api/media/order` | Puts the library in another order, `{"ids": [...]}`, every id once. |
 | `GET /api/media/{id}` | Says what a medium is. |
 | `GET /api/media/{id}/content` | Downloads its file, as uploaded. |
 | `DELETE /api/media/{id}` | Removes it, its file too. |

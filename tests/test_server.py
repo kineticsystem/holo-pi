@@ -174,6 +174,28 @@ class MediaTest(ApiTest):
         self.assertEqual(media["size"], 2 * len(self.quilt))
         self.assertGreater(media["free"], 0)
 
+    def test_orders_the_media_and_keeps_the_order(self):
+        ids = [self.upload(f"{name}_qs8x6a0.75.png").json()["id"] for name in "abc"]
+        response = self.client.put("/api/media/order", json={"ids": [ids[2], ids[0], ids[1]]})
+        self.assertEqual(response.status_code, 200, response.text)
+        names = ["c_qs8x6a0.75.png", "a_qs8x6a0.75.png", "b_qs8x6a0.75.png"]
+        self.assertEqual([item["name"] for item in response.json()["items"]], names)
+        # A replacement keeps its place, a new upload goes last, and a restart keeps the order.
+        self.upload("a_qs8x6a0.75.png")
+        self.upload("d_qs8x6a0.75.png")
+        _, client = self.server(FakeScreen())
+        self.assertEqual([item["name"] for item in client.get("/api/media").json()["items"]],
+                         names + ["d_qs8x6a0.75.png"])
+
+    def test_an_order_needs_every_id_once(self):
+        a, b = (self.upload(f"{name}_qs8x6a0.75.png").json()["id"] for name in "ab")
+        for ids, status, words in [([a], 400, "b_qs8x6a0.75.png left out"), ([a, a, b], 400, "given twice"),
+                                   ([a, b, "nope"], 404, "no medium of the id 'nope'")]:
+            response = self.client.put("/api/media/order", json={"ids": ids})
+            self.assertEqual(response.status_code, status, ids)
+            self.assertIn(words, response.json()["error"])
+        self.assertEqual([item["id"] for item in self.client.get("/api/media").json()["items"]], [a, b])
+
     def test_gives_a_medium_and_its_content(self):
         item = self.upload().json()
         self.assertEqual(self.client.get(f"/api/media/{item['id']}").json()["name"], "test_qs8x6a0.75.png")
@@ -344,7 +366,7 @@ class ServerTest(ApiTest):
 
     def test_documents_every_route(self):
         spec = self.client.get("/api/openapi.json").json()
-        self.assertEqual(set(spec["paths"]), {"/api/media", "/api/media/{id}", "/api/media/{id}/content",
+        self.assertEqual(set(spec["paths"]), {"/api/media", "/api/media/order", "/api/media/{id}", "/api/media/{id}/content",
                                               "/api/display", "/api/status", "/api/calibration"})
         for methods in spec["paths"].values():
             for operation in methods.values():

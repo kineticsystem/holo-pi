@@ -580,9 +580,15 @@ class MediaModel(BaseModel):
 
 
 class MediaListModel(BaseModel):
-    items: list[MediaModel] = Field(description="The library's media, in the order they were first uploaded.")
+    items: list[MediaModel] = Field(description="The library's media, in its order: as uploaded, a new one last, "
+                                                "unless PUT /api/media/order changed it.")
     size: int = Field(description="The bytes they take, together.", examples=[512000000])
     free: int = Field(description="The bytes left on the disk, for more.", examples=[200000000000])
+
+
+class OrderRequest(BaseModel):
+    ids: list[str] = Field(description="Every id of the library, once, in the order wanted.",
+                           examples=[["8299c881", "3f9a1c2e"]])
 
 
 class DisplayModel(BaseModel):
@@ -739,6 +745,20 @@ def create_app(display, web=None):
         """Empties the library, its files too. If the Looking Glass shows one of them, it shows black."""
         display.remove_all()
         return Response(status_code=204)
+
+    @app.put("/api/media/order", tags=["media"], response_model=MediaListModel, summary="Order the media",
+             responses={**error(400, "An id twice, or one of the library's left out."),
+                        **error(404, "No medium of an id.")})
+    def order_media(request: OrderRequest):
+        """Puts the library's media in the order of its ids, each of them once, as GET /api/media lists them and the
+        web page shows them. The order is kept, also after a restart; a new upload goes last."""
+        try:
+            display.library.reorder(request.ids)
+        except KeyError as problem:
+            raise HTTPException(404, problem.args[0]) from problem
+        except ValueError as problem:
+            raise HTTPException(400, str(problem)) from problem
+        return list_media()
 
     @app.get("/api/media/{id}", tags=["media"], response_model=MediaModel, summary="Get a medium",
              responses=NOT_FOUND)

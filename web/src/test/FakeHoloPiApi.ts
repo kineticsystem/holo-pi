@@ -76,6 +76,20 @@ export class FakeHoloPiApi implements HoloPiApi {
     this.pending.shift()?.();
   }
 
+  /** The orders orderMedia() was asked for. */
+  orders: string[][] = [];
+
+  orderMedia(ids: string[]): Promise<Result<MediaList>> {
+    this.orders.push(ids);
+    if (this.failWith) return Promise.resolve(err(this.failWith));
+    const known = new Set(this.media.map(m => m.id));
+    if (ids.length !== known.size || !ids.every(id => known.has(id))) {
+      return Promise.resolve(err("give each of the library's ids once"));
+    }
+    this.media = ids.map(id => this.media.find(m => m.id === id)!);
+    return this.listMedia();
+  }
+
   removeMedium(id: string): Promise<Result<void>> {
     if (this.refusing.has(id)) return Promise.resolve(err(`cannot remove ${id}`));
     this.media = this.media.filter(m => m.id !== id);

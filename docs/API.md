@@ -8,6 +8,7 @@
   - [Upload a Medium](#upload-a-medium)
   - [The Medium](#the-medium)
   - [List the Media](#list-the-media)
+  - [Order the Media](#order-the-media)
   - [Get, Download and Remove a Medium](#get-download-and-remove-a-medium)
   - [Remove Every Medium](#remove-every-medium)
 - [The Display](#the-display)
@@ -43,6 +44,7 @@ Requests and answers are JSON, except the upload, a multipart form, and a medium
 |---|---|---|---|
 | `GET` | `/api/media` | Lists the media, with the space they take and the space left. | `200` |
 | `POST` | `/api/media` | Uploads a quilt or a video; with `play=true`, shows it too. | `201`, `200`, `400`, `501` |
+| `PUT` | `/api/media/order` | Puts the media in another order. | `200`, `400`, `404` |
 | `DELETE` | `/api/media` | Removes every medium. | `204` |
 | `GET` | `/api/media/{id}` | What a medium is. | `200`, `404` |
 | `GET` | `/api/media/{id}/content` | Its file, as uploaded. | `200`, `404` |
@@ -139,9 +141,30 @@ GET /api/media
 
 | Field | What it is |
 |---|---|
-| `items` | The [media](#the-medium), in the order they were first uploaded. |
+| `items` | The [media](#the-medium), in the library's order: as uploaded, a new one last, unless [`PUT /api/media/order`](#order-the-media) changed it. |
 | `size` | The bytes they take, together. |
 | `free` | The bytes left on the disk, for more. |
+
+### Order the Media
+
+```
+PUT /api/media/order
+Content-Type: application/json
+```
+
+```json
+{"ids": ["8299c881", "3f9a1c2e", "c41d07aa"]}
+```
+
+Puts the library in the order of `ids`, every id of the library once, and answers the [list](#list-the-media) as it is now. The web page shows the media in this order, and moves a row when we drag it by its grip. The server keeps the order in `index.json`, so it stays after a restart. A new upload goes last; an upload that replaces a medium of the same name keeps its place.
+
+The whole order goes in each request, not one move, so that sending it twice changes nothing. A list made before another client uploaded or removed a medium no longer has every id, and the server refuses it rather than guess where the others go: the client reads the list again.
+
+| Status | When | Body |
+|---|---|---|
+| `200` | The library is in this order. | The [list](#list-the-media). |
+| `400` | An id twice, or one of the library's left out. | An [error](#errors). The order does not change. |
+| `404` | An id the library does not have. | An [error](#errors). The order does not change. |
 
 ### Get, Download and Remove a Medium
 
@@ -314,6 +337,9 @@ curl -X PUT -H "Content-Type: application/json" -d '{"media_name": "helix_qs8x6a
 
 # The library, and what is shown.
 curl http://holo.local:8095/api/media
+
+# The library in another order: every id, once.
+curl -X PUT -H "Content-Type: application/json" -d '{"ids": ["c41d07aa", "8299c881", "3f9a1c2e"]}' http://holo.local:8095/api/media/order
 curl http://holo.local:8095/api/display
 
 # Black, then empty the library.

@@ -19,6 +19,13 @@ describe('the store', () => {
     expect([state.size, state.free]).toEqual([170, 980]);
   });
 
+  test('an order puts the media in it, and those it does not name after them', () => {
+    const three = holoPiReducer(listed, { type: 'mediumUploaded', medium: medium({ id: 'c' }) });
+    const state = holoPiReducer(three, { type: 'mediaOrdered', ids: ['b', 'a'] });
+    expect(state.media?.map(m => m.id)).toEqual(['b', 'a', 'c']);
+    expect([state.size, state.free]).toEqual([three.size, three.free]);
+  });
+
   test('a removal gives its space back', () => {
     const state = holoPiReducer(listed, { type: 'mediumRemoved', id: 'a' });
     expect(state.media?.map(m => m.id)).toEqual(['b']);
