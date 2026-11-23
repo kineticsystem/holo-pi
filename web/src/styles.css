@@ -52,6 +52,12 @@ table.media:focus-visible { outline: 1px solid var(--accent); outline-offset: 2p
 table.media .id { color: var(--muted); font-family: ui-monospace, monospace; font-size: 0.8rem; }
 table.media .actions { white-space: nowrap; display: flex; gap: 0.4rem; justify-content: flex-end; }
 table.media .select { width: 1.6rem; }
+table.media .grip { width: 1rem; padding-right: 0; color: var(--muted); text-align: center; }
+table.media .grip span { cursor: grab; user-select: none; font-size: 1.05rem; line-height: 1; }
+table.media .grip span:hover { color: var(--accent); }
+table.media tbody tr.dragging td { opacity: 0.4; }
+table.media tbody tr.drop-before td { box-shadow: inset 0 2px 0 var(--accent); }
+table.media tbody tr.drop-after td { box-shadow: inset 0 -2px 0 var(--accent); }
 .badge { white-space: nowrap; margin-left: 0.5rem; font-size: 0.75rem; border: 1px solid var(--accent); color: var(--accent); border-radius: 10px; padding: 0 0.45rem; }
 .badge.warning { border-color: var(--warm); color: var(--warm); }
 .dropzone { display: grid; gap: 0.2rem; justify-items: center; padding: 1.4rem 1rem; border: 2px dashed var(--line); border-radius: 8px; color: var(--muted); cursor: pointer; text-align: center; }
@@ -67,3 +73,5 @@ table.media .select { width: 1.6rem; }
 .queue li.warned .status { color: var(--warm); }
 .queue li.failed .status { color: var(--danger); }
 .queue progress { width: 100%; }
+table.media tbody tr.current.drop-before td:first-child { box-shadow: inset 3px 0 0 var(--accent), inset 0 2px 0 var(--accent); }
+table.media tbody tr.current.drop-after td:first-child { box-shadow: inset 3px 0 0 var(--accent), inset 0 -2px 0 var(--accent); }

@@ -1,6 +1,6 @@
 # HoloPi's Web Page
 
-A page to try HoloPi without knowing its API: what the Looking Glass shows, the library of media kept on the Raspberry Pi, to show with a click on a row or the arrow keys, to download or remove, and uploads, one file or many, dropped on it or chosen. It uses the API only, as any client, and links its documentation, on `/api/docs`. The server serves it on `/`, e.g. http://holo.local:8095.
+A page to try HoloPi without knowing its API: what the Looking Glass shows, the library of media kept on the Raspberry Pi, to show with a click on a row or the arrow keys, to put in order by dragging a row by its grip or with Alt and the arrow keys, to download or remove, and uploads, one file or many, dropped on it or chosen. It uses the API only, as any client, and links its documentation, on `/api/docs`. The server serves it on `/`, e.g. http://holo.local:8095.
 
 React, TypeScript and Vite, built with pnpm, as the web pages of the StepIt projects. How it is laid out, and why, is in [The Web Page](../docs/ARCHITECTURE.md#the-web-page) of the architecture document.
 

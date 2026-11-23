@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { createEvent, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { medium } from '../test/FakeHoloPiApi';
@@ -6,13 +6,15 @@ import { MediaTable } from './MediaTable';
 
 function setUp(shownId: string | null = null, selected: string[] = [], currentId: string | null = shownId) {
   const onShow = vi.fn();
+  const onMove = vi.fn();
   const onRemove = vi.fn();
   const onSelect = vi.fn();
   const onSelectAll = vi.fn();
-  render(<MediaTable media={[medium({ id: 'a', name: 'helix_qs8x6a0.75.mp4' }), medium({ id: 'b', name: 'old.mp4', codec: 'h264', warning: 'not H.265' })]}
+  render(<MediaTable media={[medium({ id: 'a', name: 'helix_qs8x6a0.75.mp4' }), medium({ id: 'b', name: 'old.mp4', codec: 'h264', warning: 'not H.265' }),
+                             medium({ id: 'c', name: 'knot_qs8x6a0.75.jpg', kind: 'quilt' })]}
                      shownId={shownId} currentId={currentId} selected={selected} disabled={false} contentUrl={id => `/api/media/${id}/content`}
-                     onShow={onShow} onRemove={onRemove} onSelect={onSelect} onSelectAll={onSelectAll} />);
-  return { onShow, onRemove, onSelect, onSelectAll };
+                     onShow={onShow} onMove={onMove} onRemove={onRemove} onSelect={onSelect} onSelectAll={onSelectAll} />);
+  return { onShow, onMove, onRemove, onSelect, onSelectAll };
 }
 
 test('a click on a row shows its medium, and there is no play button', async () => {
@@ -74,7 +76,7 @@ test('downloads come from the server', () => {
 
 test('an empty library says how to fill it', () => {
   render(<MediaTable media={[]} shownId={null} currentId={null} selected={[]} disabled={false} contentUrl={() => ''}
-                     onShow={() => {}} onRemove={() => {}} onSelect={() => {}} onSelectAll={() => {}} />);
+                     onShow={() => {}} onMove={() => {}} onRemove={() => {}} onSelect={() => {}} onSelectAll={() => {}} />);
   expect(screen.getByText(/upload a quilt or a video/)).toBeInTheDocument();
 });
 
@@ -92,4 +94,74 @@ test('the header box selects all, and shows a part selected', async () => {
   expect(all).toHaveProperty('indeterminate', true);
   await userEvent.click(all);
   expect(onSelectAll).toHaveBeenCalledWith(true);
+});
+
+// jsdom has no DataTransfer: what the handlers use of it.
+function dataTransfer() {
+  return { effectAllowed: '', dropEffect: '', setData: vi.fn(), setDragImage: vi.fn(), files: [] };
+}
+
+function drag(name: string, onto: string, below: boolean) {
+  const transfer = dataTransfer();
+  const row = screen.getByText(onto).closest('tr')!;
+  fireEvent.dragStart(screen.getByLabelText(`Move ${name}`), { dataTransfer: transfer });
+  // jsdom's rows are of no height, at 0: a pointer below 0 is in their lower half. Its drag events have no clientY.
+  const over = createEvent.dragOver(row, { dataTransfer: transfer });
+  Object.defineProperty(over, 'clientY', { value: below ? 1 : 0 });
+  fireEvent(row, over);
+  return { row, transfer };
+}
+
+test('a row dragged by its grip onto the upper half of another lands above it', () => {
+  const { onMove, onShow } = setUp();
+  const { row, transfer } = drag('knot_qs8x6a0.75.jpg', 'helix_qs8x6a0.75.mp4', false);
+  expect(row).toHaveClass('drop-before');
+  fireEvent.drop(row, { dataTransfer: transfer });
+  expect(onMove).toHaveBeenCalledWith(['c', 'a', 'b']);
+  expect(onShow).not.toHaveBeenCalled();
+  expect(row).not.toHaveClass('drop-before');
+});
+
+test('a row dragged onto the lower half of another lands below it', () => {
+  const { onMove } = setUp();
+  const { row, transfer } = drag('helix_qs8x6a0.75.mp4', 'old.mp4', true);
+  expect(row).toHaveClass('drop-after');
+  fireEvent.drop(row, { dataTransfer: transfer });
+  expect(onMove).toHaveBeenCalledWith(['b', 'a', 'c']);
+});
+
+test('a row dropped where it was, or a drag let go elsewhere, changes nothing', () => {
+  const { onMove } = setUp();
+  const { row, transfer } = drag('helix_qs8x6a0.75.mp4', 'old.mp4', false);
+  fireEvent.drop(row, { dataTransfer: transfer });  // Above old.mp4: where it is already.
+  drag('old.mp4', 'knot_qs8x6a0.75.jpg', true);
+  fireEvent.dragEnd(screen.getByLabelText('Move old.mp4'));
+  expect(onMove).not.toHaveBeenCalled();
+  expect(screen.getByText('knot_qs8x6a0.75.jpg').closest('tr')).not.toHaveClass('drop-after');
+});
+
+test('a drag from outside the table, e.g. a file, is not a move', () => {
+  const { onMove } = setUp();
+  const row = screen.getByText('old.mp4').closest('tr')!;
+  fireEvent.dragOver(row, { dataTransfer: dataTransfer() });
+  fireEvent.drop(row, { dataTransfer: dataTransfer() });
+  expect(row.className).not.toMatch(/drop/);
+  expect(onMove).not.toHaveBeenCalled();
+});
+
+test('Alt and the arrow keys move the current row, and stop at the ends', async () => {
+  const { onMove, onShow } = setUp('b');
+  screen.getByRole('table').focus();
+  await userEvent.keyboard('{Alt>}{ArrowUp}{/Alt}');
+  expect(onMove).toHaveBeenLastCalledWith(['b', 'a', 'c']);
+  await userEvent.keyboard('{Alt>}{ArrowDown}{/Alt}');
+  expect(onMove).toHaveBeenLastCalledWith(['a', 'c', 'b']);
+  expect(onShow).not.toHaveBeenCalled();
+});
+
+test('with nothing current, Alt and an arrow move nothing', async () => {
+  const { onMove } = setUp();
+  screen.getByRole('table').focus();
+  await userEvent.keyboard('{Alt>}{ArrowDown}{/Alt}');
+  expect(onMove).not.toHaveBeenCalled();
 });

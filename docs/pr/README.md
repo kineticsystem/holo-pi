@@ -14,6 +14,7 @@ Each pull request has a notes file here. It keeps what the pull request does not
 | [12-click-to-show.md](12-click-to-show.md) | [#12](https://github.com/kineticsystem/holo-pi/pull/12) Web page: click a row to show it, the arrow keys to go up and down |
 | [13-upload-shows-first.md](13-upload-shows-first.md) | [#13](https://github.com/kineticsystem/holo-pi/pull/13) Uploads always show the first file; no reverse box |
 | [14-web-page-screenshot.md](14-web-page-screenshot.md) | [#14](https://github.com/kineticsystem/holo-pi/pull/14) README: the web page's screenshot as it is now |
+| [reorder-media.md](reorder-media.md) | Order the library by dragging a row |
 
 ## How to Write One
 

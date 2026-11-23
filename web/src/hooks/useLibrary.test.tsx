@@ -26,6 +26,26 @@ test('showing a medium marks it shown, and removing it shows black', async () =>
   expect(result.current.library.shownId).toBeNull();
 });
 
+test('a new order shows at once, and the server keeps it', async () => {
+  const api = new FakeHoloPiApi([medium({ id: 'a' }), medium({ id: 'b' }), medium({ id: 'c' })]);
+  const result = setUp(api);
+  await waitFor(() => expect(result.current.library.media).not.toBeNull());
+  await act(() => result.current.library.reorder(['c', 'a', 'b']));
+  expect(result.current.library.media?.map(m => m.id)).toEqual(['c', 'a', 'b']);
+  expect(api.media.map(m => m.id)).toEqual(['c', 'a', 'b']);
+  expect(result.current.library.error).toBeNull();
+});
+
+test('an order the server refuses says why, and the list comes back as the server has it', async () => {
+  const api = new FakeHoloPiApi([medium({ id: 'a' }), medium({ id: 'b' })]);
+  const result = setUp(api);
+  await waitFor(() => expect(result.current.library.media).not.toBeNull());
+  api.media.push(medium({ id: 'c' }));  // Uploaded from elsewhere, meanwhile.
+  await act(() => result.current.library.reorder(['b', 'a']));
+  expect(result.current.library.error).toBe("give each of the library's ids once");
+  expect(result.current.library.media?.map(m => m.id)).toEqual(['a', 'b', 'c']);
+});
+
 test('an unreachable server says so', async () => {
   const api = new FakeHoloPiApi();
   api.failWith = 'cannot reach the server';

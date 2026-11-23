@@ -1,6 +1,6 @@
 // The library's view model: the media, the space they take, which one is shown, and the commands to read the list
-// again, remove one, several, or them all. Used by the library panel.
-import { useCallback, useEffect, useState } from 'react';
+// again, put it in another order, remove one, several, or them all. Used by the library panel.
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { selectShownId } from '../model/holoPiStore';
 import { useHoloPiStore } from '../model/HoloPiStoreContext';
 import { useServices } from '../services/ServicesContext';
@@ -10,6 +10,7 @@ export function useLibrary() {
   const { api } = useServices();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const orderRef = useRef(0);  // The number of the last order asked for: an older answer is stale.
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     const result = await api.listMedia(signal);
@@ -46,6 +47,22 @@ export function useLibrary() {
     if (failures.length < ids.length) await refreshDisplay();
   }
 
+  // The new order shows at once; the server's answer then replaces the list, unless another order came after it. If
+  // the server refuses it, e.g. a medium came or went meanwhile, the page says why and reads the list again.
+  async function reorder(ids: string[]) {
+    const number = ++orderRef.current;
+    dispatch({ type: 'mediaOrdered', ids });
+    const result = await api.orderMedia(ids);
+    if (number !== orderRef.current) return;
+    if (result.ok) {
+      dispatch({ type: 'mediaListed', list: result.value });
+      setError(null);
+    } else {
+      await refresh();
+      setError(result.error);
+    }
+  }
+
   async function removeAll() {
     if (!state.media?.length) return;
     setBusy(true);
@@ -77,6 +94,7 @@ export function useLibrary() {
     remove: (id: string) => removeMany([id]),
     removeMany,
     removeAll,
+    reorder,
     contentUrl: api.contentUrl,
   };
 }

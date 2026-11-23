@@ -68,6 +68,8 @@ export interface HoloPiApi {
   /** Uploads a file, reporting the share sent, 0 to 1; abort() through the signal stops it. */
   upload(file: File, options: UploadOptions, onProgress: (sent: number) => void,
          signal?: AbortSignal): Promise<Result<Medium>>;
+  /** Puts the library in the order of `ids`, each of its ids once; answers the list as it is now. */
+  orderMedia(ids: string[]): Promise<Result<MediaList>>;
   removeMedium(id: string): Promise<Result<void>>;
   removeAllMedia(): Promise<Result<void>>;
   getDisplay(signal?: AbortSignal): Promise<Result<Display>>;
