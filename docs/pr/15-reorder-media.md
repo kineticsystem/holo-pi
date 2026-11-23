@@ -1,6 +1,6 @@
 # Order the Library by Dragging
 
-Branch `reorder-media`.
+Pull request [#15](https://github.com/kineticsystem/holo-pi/pull/15), branch `reorder-media`.
 
 ## Goal
 
