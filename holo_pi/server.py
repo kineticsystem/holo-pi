@@ -22,7 +22,7 @@ import threading
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi import Path as FastApiPath
@@ -549,12 +549,13 @@ class Display:
             return nothing
 
     def item_status(self, item):
-        """A library's item, as the API answers it: shown, if it is on the Looking Glass now, not only waiting."""
+        """A library's item, as the API answers it: shown, if it is on the Looking Glass now, not only waiting; of its
+        grade, only whether it has one, and whether it is on."""
         with self.lock:
             on_screen = (self.player is not None and self.player.shown_on is not None) if self.video is not None \
                 else self.shown_on is not None
             return dict(asdict(item), warning=codec_warning(item.codec) if item.is_video else None,
-                        shown=self.shown_id() == item.id and on_screen)
+                        grade=self.grade(item).state, shown=self.shown_id() == item.id and on_screen)
 
 
 def _now():
@@ -636,6 +637,9 @@ class MediaModel(BaseModel):
     codec: Optional[str] = Field(None, description="How a video is encoded.", examples=["hevc"])
     warning: Optional[str] = Field(None, description="What to change: for a video not in H.265 (HEVC), which a "
                                                      "Raspberry Pi 5 decodes on its processor, maybe too slowly.")
+    grade: Optional[Literal["on", "off"]] = Field(
+        None, description="Whether a quilt is graded: on; off, shown as uploaded, its values kept; or null, not "
+                          "graded. The values are at /api/media/{id}/grade.", examples=["on"])
     shown: bool = Field(description="Whether the Looking Glass shows it now.")
 
 

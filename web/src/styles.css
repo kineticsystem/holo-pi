@@ -59,6 +59,8 @@ table.media tbody tr.dragging td { opacity: 0.4; }
 table.media tbody tr.drop-before td { box-shadow: inset 0 2px 0 var(--accent); }
 table.media tbody tr.drop-after td { box-shadow: inset 0 -2px 0 var(--accent); }
 .badge { white-space: nowrap; margin-left: 0.5rem; font-size: 0.75rem; border: 1px solid var(--accent); color: var(--accent); border-radius: 10px; padding: 0 0.45rem; }
+.badge.graded { border-color: #9be59b; color: #9be59b; }
+.badge.off { border-color: var(--muted); color: var(--muted); }
 .badge.warning { border-color: var(--warm); color: var(--warm); }
 .dropzone { display: grid; gap: 0.2rem; justify-items: center; padding: 1.4rem 1rem; border: 2px dashed var(--line); border-radius: 8px; color: var(--muted); cursor: pointer; text-align: center; }
 .dropzone strong { color: var(--text); }

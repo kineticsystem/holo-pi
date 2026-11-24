@@ -5,9 +5,9 @@
 import { useEffect, useState } from 'react';
 import { selectShownId } from '../model/holoPiStore';
 import { useHoloPiStore } from '../model/HoloPiStoreContext';
-import type { Grade, GradeParameter } from '../services/HoloPiApi';
+import type { Grade, GradeParameter, GradeState } from '../services/HoloPiApi';
 import { useServices } from '../services/ServicesContext';
-import { groupBySection } from '../utils/gradeUtils';
+import { gradeState, groupBySection, isChanged } from '../utils/gradeUtils';
 import { makeLatest } from '../utils/latestUtils';
 
 export function useGrade(id: string) {
@@ -18,9 +18,10 @@ export function useGrade(id: string) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedName, setSavedName] = useState<string | null>(null); // Of the last save, until the grade changes.
-  const [latest] = useState(() => makeLatest<Grade>(async value => {
-    const result = await api.setGrade(id, value);
+  const [latest] = useState(() => makeLatest<{ grade: Grade; graded: GradeState | null }>(async next => {
+    const result = await api.setGrade(id, next.grade);
     setError(result.ok ? null : result.error);
+    if (result.ok) dispatch({ type: 'mediumGraded', id, grade: next.graded }); // The library says so too.
   }));
 
   // The tools and the grade, from the server, when the page opens.
@@ -40,13 +41,14 @@ export function useGrade(id: string) {
   }, [api, id]);
 
   function apply(next: Grade) {
+    if (parameters === null) return;
     setGrade(next);
     setSavedName(null);
-    latest.send(next);
+    latest.send({ grade: next, graded: gradeState(next, parameters) });
   }
 
   const ready = parameters !== null && grade !== null;
-  const changed = ready && parameters.some(p => (grade.values[p.id] ?? p.default) !== p.default);
+  const changed = ready && isChanged(grade, parameters);
   const showsOriginal = grade?.enabled === false;
   const canSave = changed && !showsOriginal && !saving;
 

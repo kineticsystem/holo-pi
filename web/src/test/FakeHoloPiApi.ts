@@ -6,7 +6,7 @@ export function medium(fields: Partial<Medium> = {}): Medium {
   return {
     id: 'a1', name: 'helix_qs8x6a0.75.mp4', kind: 'quilt video', size: 1000, uploaded: '2026-11-17T11:45:02+00:00',
     width: 3360, height: 3360, columns: 8, rows: 6, reverse: false, fps: 24, frames: 480, duration: 20,
-    codec: 'hevc', warning: null, shown: false, ...fields,
+    codec: 'hevc', warning: null, grade: null, shown: false, ...fields,
   };
 }
 

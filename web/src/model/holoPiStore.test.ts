@@ -32,6 +32,17 @@ describe('the store', () => {
     expect([state.size, state.free]).toEqual([150, 1000]);
   });
 
+  test('a medium graded says so in the list and on the display, and the same again changes nothing', () => {
+    const display = { ...initialDisplay(), source: 'media', media: medium({ id: 'b' }) } as const;
+    const shown = holoPiReducer(listed, { type: 'displayRead', display });
+    const state = holoPiReducer(shown, { type: 'mediumGraded', id: 'b', grade: 'on' });
+    expect(state.media?.map(m => m.grade)).toEqual([null, 'on']);
+    expect(state.display?.media?.grade).toBe('on');
+    expect(holoPiReducer(state, { type: 'mediumGraded', id: 'b', grade: 'on' })).toBe(state);
+    const other = holoPiReducer(state, { type: 'mediumGraded', id: 'a', grade: 'off' });
+    expect([other.media?.[0].grade, other.display]).toEqual(['off', state.display]);
+  });
+
   test('a removal gives its space back', () => {
     const state = holoPiReducer(listed, { type: 'mediumRemoved', id: 'a' });
     expect(state.media?.map(m => m.id)).toEqual(['b']);

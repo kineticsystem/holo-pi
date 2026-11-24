@@ -66,8 +66,19 @@ test('remove asks again before it acts', async () => {
 
 test('the medium shown and a video not in H.265 are marked', () => {
   setUp('a');
-  expect(screen.getByText('on screen').closest('tr')).toHaveTextContent('helix_qs8x6a0.75.mp4');
+  expect(screen.getByText('helix_qs8x6a0.75.mp4').closest('tr')).toHaveClass('shown');
+  expect(screen.getByText('old.mp4').closest('tr')).not.toHaveClass('shown');
   expect(screen.getByText('not H.265').closest('tr')).toHaveTextContent('old.mp4');
+});
+
+test('a graded quilt is marked, also when its grade is off, and no other', () => {
+  const quilts = [medium({ id: 'a', name: 'on.png', grade: 'on' }), medium({ id: 'b', name: 'off.png', grade: 'off' }),
+                  medium({ id: 'c', name: 'plain.png' })];
+  render(<MediaTable media={quilts} shownId={null} currentId={null} selected={[]} disabled={false} contentUrl={() => ''}
+                     onShow={() => {}} onMove={() => {}} onRename={() => Promise.resolve(true)} onRemove={() => {}} onSelect={() => {}} onSelectAll={() => {}} />);
+  expect(screen.getByText('graded').closest('tr')).toHaveTextContent('on.png');
+  expect(screen.getByText('grade off').closest('tr')).toHaveTextContent('off.png');
+  expect(screen.getByText('plain.png').closest('tr')).not.toHaveTextContent('grade');
 });
 
 test('downloads come from the server', () => {

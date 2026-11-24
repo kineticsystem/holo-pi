@@ -120,6 +120,7 @@ The server decodes with FFmpeg, through PyAV: with the Pi 5's hardware decoder f
   "duration": 20.0,
   "codec": "hevc",
   "warning": null,
+  "grade": null,
   "shown": true
 }
 ```
@@ -137,6 +138,7 @@ The server decodes with FFmpeg, through PyAV: with the Pi 5's hardware decoder f
 | `fps`, `frames`, `duration` | A video's frames per second, number of frames and length in seconds, if its file says; `null` for a quilt. |
 | `codec` | How a video is encoded, e.g. `hevc`; `null` for a quilt. |
 | `warning` | What to change, for a video not in H.265, or `null`. |
+| `grade` | Whether a quilt is [graded](#the-grades): `"on"`; `"off"`, shown as uploaded, with its values kept; or `null`, not graded, as every video. |
 | `shown` | Whether the Looking Glass shows it now. |
 
 ### List the Media
@@ -237,7 +239,7 @@ DELETE /api/media/{id}/grade
 curl -X PUT -H "Content-Type: application/json" -d '{"exposure": 0.5, "saturation": 20, "sharpness": 60}' http://holo.local:8095/api/media/8299c881/grade
 ```
 
-`PUT` replaces the whole grade: a value not given is at its default. If the Looking Glass shows the quilt, it answers once the quilt is drawn with the grade, about 14 ms later on a Pi 5, or about 31 with a tool that looks around each pixel: a client can send one request after another to follow a slider. If the quilt cannot be shown yet, the grade is kept, and `GET /api/display` says why. It answers the grade, as `GET` does: every value, and `enabled`, which when `false` shows the quilt as uploaded and keeps the values.
+`PUT` replaces the whole grade: a value not given is at its default. If the Looking Glass shows the quilt, it answers once the quilt is drawn with the grade, about 14 ms later on a Pi 5, or about 31 with a tool that looks around each pixel: a client can send one request after another to follow a slider. If the quilt cannot be shown yet, the grade is kept, and `GET /api/display` says why. It answers the grade, as `GET` does: every value, and `enabled`, which when `false` shows the quilt as uploaded and keeps the values. The [medium](#the-medium) says in its `grade` whether it has one, so that a client can mark the graded quilts of a list without a request for each.
 
 The server writes the grade to its disk a second after the last change, and it stays after a restart. An upload that replaces a medium of the same name has no grade. `DELETE` puts every value back to its default and answers `204`, with no body.
 
