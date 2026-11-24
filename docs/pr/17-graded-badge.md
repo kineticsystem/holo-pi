@@ -1,6 +1,6 @@
 # Mark the Graded Quilts
 
-Branch `graded-badge`.
+Pull request [#17](https://github.com/kineticsystem/holo-pi/pull/17), branch `graded-badge`.
 
 ## Goal
 
