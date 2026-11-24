@@ -223,7 +223,7 @@ Empties the library, its files too, and answers `204`. If the Looking Glass show
 
 ## The Grades
 
-Experimental. A grade is how a quilt's light and colours are changed when it is shown: exposure, contrast, saturation, sharpness, and so on, the tools of StepIt Grader. It is kept beside the quilt, in the library's index, and the quilt's file stays as uploaded. Only quilts can be graded, not videos, and only a screen drawn by the GPU, `--screen gl`, the container's, shows grades.
+A grade is how a quilt's light and colours are changed when it is shown: exposure, contrast, saturation, sharpness, and so on, the tools of StepIt Grader. It is kept beside the quilt, in the library's index, and the quilt's file stays as uploaded. Only quilts can be graded, not videos, and only a screen drawn by the GPU, `--screen gl`, the container's, shows grades.
 
 ### Grade a Quilt
 

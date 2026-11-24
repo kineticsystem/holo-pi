@@ -1,4 +1,4 @@
-"""A quilt shown with a grade, on the GPU, fast enough to follow a slider on a Raspberry Pi. Experimental.
+"""A quilt shown with a grade, on the GPU, fast enough to follow a slider on a Raspberry Pi.
 
 A slider moves only a few numbers, so what does not depend on them is done once per picture, and kept:
 

@@ -1,6 +1,6 @@
 # Grade a Quilt on the Looking Glass, and Rename a Medium
 
-Pull request [#16](https://github.com/kineticsystem/holo-pi/pull/16), branch `quilt-grading`. The grading is experimental.
+Pull request [#16](https://github.com/kineticsystem/holo-pi/pull/16), branch `quilt-grading`.
 
 ## Goal
 

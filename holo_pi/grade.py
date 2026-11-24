@@ -1,4 +1,4 @@
-"""The grade of a quilt: how its light and its colours are changed when it is shown. Experimental.
+"""The grade of a quilt: how its light and its colours are changed when it is shown.
 
 The tools, their ranges and their math are StepIt Grader's, a desktop program that grades photographs: PARAMETERS is
 the table of them, which the API and the web page read, so that a tool is added here and in the shader, gl_grade.py,

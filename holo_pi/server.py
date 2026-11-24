@@ -599,7 +599,7 @@ server on a network you trust. **Try it out** changes what the Looking Glass sho
 TAGS = [
     {"name": "media", "description": "The library: the quilts and videos kept on the server's disk. Upload, list, "
                                      "download and remove them."},
-    {"name": "grades", "description": "Experimental. How a quilt's light and colours are changed when it is shown: "
+    {"name": "grades", "description": "How a quilt's light and colours are changed when it is shown: "
                                       "kept beside the quilt, whose file stays as uploaded."},
     {"name": "display", "description": "What the Looking Glass shows: a medium of the library, the test pattern, "
                                        "or black."},

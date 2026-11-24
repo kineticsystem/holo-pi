@@ -67,7 +67,7 @@ What HoloPi uses of the system:
 | [`holo_pi/x11.py`](../holo_pi/x11.py) | Full-screen on a given monitor under X11, through libX11 and ctypes. |
 | [`holo_pi/drm.py`](../holo_pi/drm.py) | The screen without a desktop: DRM/KMS, through libdrm and ctypes. |
 | [`holo_pi/gl.py`](../holo_pi/gl.py) | The screen without a desktop, drawn by the GPU: the interleaving as an OpenGL ES shader, through GBM, EGL and ctypes. |
-| [`holo_pi/grade.py`](../holo_pi/grade.py) | A quilt's grade, experimental: its parameters, its values, and the numbers the GPU needs of them. |
+| [`holo_pi/grade.py`](../holo_pi/grade.py) | A quilt's grade: its parameters, its values, and the numbers the GPU needs of them. |
 | [`holo_pi/gl_grade.py`](../holo_pi/gl_grade.py) | A quilt drawn with a grade by the GPU. |
 | [`holo_pi/video.py`](../holo_pi/video.py) | Videos: reading one, with PyAV, and the `Player`, which decodes one, with the hardware decoder when there is one, and plays it on a screen in a loop. |
 | [`holo_pi/library.py`](../holo_pi/library.py) | The library: the media kept on disk, what each is, and its unique name and id. |
@@ -176,7 +176,7 @@ Three details are easy to break. The shader and `table()` must stay the same for
 
 ### The Grades
 
-Experimental. A grade changes a quilt's light and colours as it is shown, with the tools of StepIt Grader, our desktop program that grades photographs. [`grade.py`](../holo_pi/grade.py) has the table of the parameters, `PARAMETERS`, which the API and the web page read, and the matrices and curves the shaders need of a `Grade`; it knows no OpenGL. `GradedQuilt`, in [`gl_grade.py`](../holo_pi/gl_grade.py), draws one picture with one grade after another, through the `Renderer`'s context.
+A grade changes a quilt's light and colours as it is shown, with the tools of StepIt Grader, our desktop program that grades photographs. [`grade.py`](../holo_pi/grade.py) has the table of the parameters, `PARAMETERS`, which the API and the web page read, and the matrices and curves the shaders need of a `Grade`; it knows no OpenGL. `GradedQuilt`, in [`gl_grade.py`](../holo_pi/gl_grade.py), draws one picture with one grade after another, through the `Renderer`'s context.
 
 To follow a slider, it does only once per picture what does not depend on the grade:
 

@@ -1,4 +1,4 @@
-// The grading page of a quilt: its tools, each change of which the Looking Glass shows at once. Experimental.
+// The grading page of a quilt: its tools, each change of which the Looking Glass shows at once.
 import { ConfirmButton } from '../components/ConfirmButton';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { ToolSection } from '../components/ToolSection';
@@ -18,7 +18,6 @@ export function GradePage({ id }: { id: string }) {
         <p className="totals">
           <a className="button" href={formatRoute({ page: 'library' })}>← Library</a>
           <strong>{grade.name}</strong>
-          <span className="badge warning">experimental</span>
           <button disabled={!grade.changed} aria-pressed={grade.showsOriginal} onClick={grade.toggleOriginal}>
             {grade.showsOriginal ? 'Show graded' : 'Show original'}
           </button>

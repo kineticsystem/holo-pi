@@ -202,9 +202,6 @@ print(response.json()["id"])
 
 ### Grade a Quilt
 
-> [!WARNING]
-> Grading is experimental.
-
 Grading changes a quilt's light and colours while the Portrait shows it. Show a quilt of the library, then click **Grade…**, below what the Looking Glass shows. The grading page opens, and the Portrait follows each slider as it moves:
 
 <p align="center"><img src="docs/images/grading-page.png" alt="HoloPi's grading page, for the orrery quilt: buttons to go back to the library, show the original, save as a new quilt and reset; below, the sliders in sections, Color, Light, Tone Curve, the folded Color Mixer, and Effects, with temperature, vibrance, exposure, contrast, highlights, shadows, structure and sharpness changed." width="700"></p>
