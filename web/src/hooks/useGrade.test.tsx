@@ -4,10 +4,11 @@ import { FakeHoloPiApi, medium } from '../test/FakeHoloPiApi';
 import { makeWrapper } from '../test/renderWithServices';
 import { useDisplay } from './useDisplay';
 import { useGrade } from './useGrade';
+import { useLibrary } from './useLibrary';
 
 async function setUp(api = new FakeHoloPiApi([medium({ id: 'a', kind: 'quilt' })])) {
-  const { result } = renderHook(() => ({ grade: useGrade('a'), display: useDisplay() }), { wrapper: makeWrapper({ api }) });
-  await waitFor(() => expect(result.current.grade.loading).toBe(false));
+  const { result } = renderHook(() => ({ grade: useGrade('a'), display: useDisplay(), library: useLibrary() }), { wrapper: makeWrapper({ api }) });
+  await waitFor(() => expect(result.current.grade.loading || result.current.library.loading).toBe(false));
   return { api, result };
 }
 
@@ -76,4 +77,50 @@ test('it says whether the Looking Glass shows the quilt', async () => {
   expect(result.current.grade.onScreen).toBe(false);
   await act(() => result.current.display.show('a'));
   expect(result.current.grade.onScreen).toBe(true);
+});
+
+test('a save keeps the quilt with its grade as a new one, in the library', async () => {
+  const { api, result } = await setUp();
+  expect(result.current.grade.canSave).toBe(false); // Nothing to save yet.
+  await act(async () => result.current.grade.change('contrast', 20));
+  await act(() => result.current.grade.save());
+  expect(api.saves).toEqual([{ id: 'a', grade: { enabled: true, values: { contrast: 20 } } }]);
+  expect(result.current.grade.savedName).toBe('helix-graded_qs8x6a0.75.png');
+  expect(result.current.library.media?.map(m => m.id)).toEqual(['a', 'saved-1']);
+  await act(async () => result.current.grade.change('contrast', 30));
+  expect(result.current.grade.savedName).toBeNull();
+});
+
+test('a save waits for the last change to reach the server', async () => {
+  const { api, result } = await setUp();
+  api.holdGrades = true;
+  for (const value of [10, 20]) act(() => result.current.grade.change('contrast', value));
+  act(() => void result.current.grade.save());
+  await act(async () => api.finishGrade());
+  expect(api.saves).toEqual([]);
+  await act(async () => api.finishGrade());
+  await waitFor(() => expect(api.saves.map(s => s.grade?.values.contrast)).toEqual([20]));
+});
+
+test('one save at a time', async () => {
+  const { api, result } = await setUp();
+  api.holdSaves = true;
+  await act(async () => result.current.grade.change('contrast', 20));
+  await act(async () => void result.current.grade.save());
+  expect([result.current.grade.saving, result.current.grade.canSave]).toEqual([true, false]);
+  await act(() => result.current.grade.save());
+  expect(api.saves).toHaveLength(1);
+  await act(async () => api.finishSave());
+  await waitFor(() => expect(result.current.grade.saving).toBe(false));
+});
+
+test('the original shown is not saved, and a save that fails says why', async () => {
+  const { api, result } = await setUp();
+  await act(async () => result.current.grade.change('contrast', 20));
+  await act(async () => result.current.grade.toggleOriginal());
+  expect(result.current.grade.canSave).toBe(false);
+  await act(async () => result.current.grade.toggleOriginal());
+  api.failWith = 'the disk is full';
+  await act(() => result.current.grade.save());
+  expect([result.current.grade.error, result.current.grade.savedName]).toEqual(['the disk is full', null]);
 });

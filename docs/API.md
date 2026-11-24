@@ -13,6 +13,7 @@
   - [Remove Every Medium](#remove-every-medium)
 - [The Grades](#the-grades)
   - [Grade a Quilt](#grade-a-quilt)
+  - [Save a Graded Quilt](#save-a-graded-quilt)
   - [The Parameters](#the-parameters)
 - [The Display](#the-display)
   - [What Is Shown](#what-is-shown)
@@ -55,6 +56,7 @@ Requests and answers are JSON, except the upload, a multipart form, and a medium
 | `GET` | `/api/media/{id}/grade` | A quilt's grade. | `200`, `404` |
 | `PUT` | `/api/media/{id}/grade` | Grades a quilt. | `200`, `400`, `404`, `501` |
 | `DELETE` | `/api/media/{id}/grade` | Removes its grade. | `204`, `400`, `404`, `501` |
+| `POST` | `/api/media/{id}/graded-copies` | Saves the quilt with its grade, as a new quilt. | `201`, `400`, `404`, `501`, `503` |
 | `GET` | `/api/grade-parameters` | What a grade is made of. | `200` |
 | `GET` | `/api/display` | What the Looking Glass shows. | `200` |
 | `PUT` | `/api/display` | Shows a medium, by its id or its name, or the test pattern. | `200`, `400`, `404`, `503` |
@@ -225,6 +227,22 @@ The server writes the grade to its disk a second after the last change, and it s
 | `422` | A value out of its range, e.g. `{"exposure": 9}`. | An [error](#errors). |
 | `501` | The screen is not drawn by the GPU. | An [error](#errors). |
 
+### Save a Graded Quilt
+
+```
+POST /api/media/{id}/graded-copies
+```
+
+Keeps the quilt with its grade as a new quilt, the last of the library, and answers `201` with its `Location`, `/api/media/{id}` of the new one, and the [medium](#the-medium). The request has no body: it saves the grade the server has. The new quilt is a PNG, without loss, of the same size, layout and order of views, whose name gets `-graded` before its layout, e.g. `helix-graded_qs8x6a0.75.png`, then `helix-graded-2_qs8x6a0.75.png`: it never replaces another. It has no grade of its own, as it is in its pixels, and any Looking Glass can show it. The quilt, its grade and what the Looking Glass shows do not change.
+
+| Status | When | Body |
+|---|---|---|
+| `201` | The new quilt is in the library. | The [medium](#the-medium). |
+| `400` | A video, or a quilt that has no grade, or whose grade is switched off. | An [error](#errors). |
+| `404` | An id the library does not have. | An [error](#errors). |
+| `501` | The screen is not drawn by the GPU. | An [error](#errors). |
+| `503` | The Looking Glass is not ready: the GPU draws only with its screen. | An [error](#errors). |
+
 ### The Parameters
 
 ```
@@ -373,7 +391,7 @@ Every error has the same body, with what went wrong and what to check:
 
 | Status | Meaning |
 |---|---|
-| `400` | The request cannot work, whatever the Looking Glass: not an image nor a video, no layout, a hologram video of another size, a video to grade, or nothing to show. |
+| `400` | The request cannot work, whatever the Looking Glass: not an image nor a video, no layout, a hologram video of another size, a video to grade, no grade to save, or nothing to show. |
 | `404` | No medium of this id or name. |
 | `422` | A field is missing, of the wrong type or out of its range: `{"error": "invalid request: body.columns: ..."}`. |
 | `501` | A video, and the server has no PyAV; or a grade, and the screen is not drawn by the GPU. |

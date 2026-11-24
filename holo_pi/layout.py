@@ -20,6 +20,14 @@ class Layout:
     def views(self):
         return self.columns * self.rows
 
+    @staticmethod
+    def rename(path, suffix, extension):
+        """The file name of `path` with `suffix` before its layout, e.g. helix-graded_qs8x6a0.75.png."""
+        stem = Path(path).stem
+        match = NAME.search(stem)
+        at = match.start() if match else len(stem)
+        return stem[:at] + suffix + stem[at:] + extension
+
     @classmethod
     def from_name(cls, path):
         """The layout written in a quilt's file name, e.g. _qs8x6a0.75, or None."""

@@ -175,6 +175,28 @@ export class FakeHoloPiApi implements HoloPiApi {
     this.pendingGrades.shift()?.();
   }
 
+  /** The saves asked for: the quilt's id, and its grade at that moment. */
+  saves: { id: string; grade: Grade | undefined }[] = [];
+  /** Saves wait for finishSave(). */
+  holdSaves = false;
+  private pendingSaves: (() => void)[] = [];
+
+  saveGraded(id: string): Promise<Result<Medium>> {
+    this.saves.push({ id, grade: this.grades.get(id) });
+    const saved = medium({ id: `saved-${this.saves.length}`, name: 'helix-graded_qs8x6a0.75.png', kind: 'quilt' });
+    const save = () => {
+      if (!this.failWith) this.media.push(saved);
+      return this.answer(saved);
+    };
+    if (!this.holdSaves) return save();
+    return new Promise(resolve => this.pendingSaves.push(() => void save().then(resolve)));
+  }
+
+  /** Lets the oldest save waiting end. */
+  finishSave() {
+    this.pendingSaves.shift()?.();
+  }
+
   getStatus(): Promise<Result<ServerStatus>> {
     return this.answer({ version: '0.1.0', screen: this.screen, looking_glass: { serial: 'LKG-PORT-00000', width: 1536, height: 2048 },
                          calibration_error: null, display: this.display });

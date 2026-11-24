@@ -208,6 +208,28 @@ class GpuGradeTest(unittest.TestCase):
         self.renderer.black()
         self.assertIsNone(self.renderer.graded)
 
+    def test_the_whole_quilt_has_the_colours_of_its_hologram(self):
+        quilt = np.random.default_rng(1).integers(0, 256, (6 * 80, 8 * 60, 3), dtype=np.uint8)
+        grade = Grade.of({"exposure": 0.5, "shadows": 60, "sharpness": 80, "structure": 40, "blue_hue": 30})
+        self.renderer.quilt(quilt, PORTRAIT, CALIBRATION, True, grade)
+        hologram, kept = self.renderer.read(), self.renderer.graded
+        saved = self.renderer.graded_picture(quilt, PORTRAIT, grade)
+        self.assertEqual((saved.shape, saved.dtype), (quilt.shape, quilt.dtype))
+        # What is shown is kept as it was.
+        self.assertIs(self.renderer.graded, kept)
+        self.renderer.quilt(quilt, PORTRAIT, CALIBRATION, True, grade)
+        np.testing.assert_array_equal(self.renderer.read(), hologram)
+        # The saved quilt, shown as it is, is the graded one.
+        self.renderer.quilt(saved, PORTRAIT, CALIBRATION, True)
+        np.testing.assert_array_equal(self.renderer.read(), hologram)
+
+    def test_the_whole_quilt_stays_the_right_way_up(self):
+        quilt = quilt_of(flat(10, 10, 10))
+        quilt[:40, :30] = 200  # The top left.
+        saved = self.renderer.graded_picture(quilt, PORTRAIT, Grade.of({"exposure": 0.2}))
+        self.assertTrue((saved[:40, :30] > 100).all())
+        self.assertTrue((saved[40:] < 100).all() and (saved[:, 30:] < 100).all())
+
     def test_what_is_shown_next_is_not_graded(self):
         plain = self.draw(ramps())
         self.draw(ramps(), exposure=2, sharpness=50)

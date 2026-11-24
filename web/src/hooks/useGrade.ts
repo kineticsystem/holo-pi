@@ -1,6 +1,7 @@
 // The grading page's view model: a quilt's grade, the tools to change it, section by section, and the commands that
 // change it. Each change goes to the server at once, which draws it on the Looking Glass and keeps it; while one is on
-// its way, only the newest waits, so the Looking Glass follows a slider as fast as it can.
+// its way, only the newest waits, so the Looking Glass follows a slider as fast as it can. A save keeps the quilt with its
+// grade as a new one, in the library.
 import { useEffect, useState } from 'react';
 import { selectShownId } from '../model/holoPiStore';
 import { useHoloPiStore } from '../model/HoloPiStoreContext';
@@ -10,12 +11,14 @@ import { groupBySection } from '../utils/gradeUtils';
 import { makeLatest } from '../utils/latestUtils';
 
 export function useGrade(id: string) {
-  const { state } = useHoloPiStore();
+  const { state, dispatch } = useHoloPiStore();
   const { api } = useServices();
   const [parameters, setParameters] = useState<GradeParameter[] | null>(null);
   const [grade, setGrade] = useState<Grade | null>(null); // null until the server answers.
   const [error, setError] = useState<string | null>(null);
-  const [send] = useState(() => makeLatest<Grade>(async value => {
+  const [saving, setSaving] = useState(false);
+  const [savedName, setSavedName] = useState<string | null>(null); // Of the last save, until the grade changes.
+  const [latest] = useState(() => makeLatest<Grade>(async value => {
     const result = await api.setGrade(id, value);
     setError(result.ok ? null : result.error);
   }));
@@ -38,11 +41,32 @@ export function useGrade(id: string) {
 
   function apply(next: Grade) {
     setGrade(next);
-    send(next);
+    setSavedName(null);
+    latest.send(next);
   }
 
   const ready = parameters !== null && grade !== null;
   const changed = ready && parameters.some(p => (grade.values[p.id] ?? p.default) !== p.default);
+  const showsOriginal = grade?.enabled === false;
+  const canSave = changed && !showsOriginal && !saving;
+
+  // The server saves the grade it has: the last change must have reached it.
+  async function save() {
+    if (!canSave) return;
+    setSaving(true);
+    setSavedName(null);
+    await latest.settled();
+    const result = await api.saveGraded(id);
+    setSaving(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setError(null);
+    setSavedName(result.value.name);
+    dispatch({ type: 'mediumUploaded', medium: result.value });
+  }
+
   const name = state.media?.find(medium => medium.id === id)?.name
     ?? (state.display?.media?.id === id ? state.display.media.name : id);
 
@@ -52,7 +76,11 @@ export function useGrade(id: string) {
     /** Whether the grade differs from the defaults, so that there is something to reset, or to compare with. */
     changed,
     /** Whether the Looking Glass shows the quilt without its grade, to compare. */
-    showsOriginal: grade?.enabled === false,
+    showsOriginal,
+    canSave,
+    saving,
+    /** The name of the new quilt, once saved, until the grade changes. */
+    savedName,
     /** Whether the changes are seen: the Looking Glass may show something else meanwhile. */
     onScreen: selectShownId(state) === id,
     loading: !ready && error === null,
@@ -64,6 +92,7 @@ export function useGrade(id: string) {
     toggleOriginal() {
       if (grade) apply({ ...grade, enabled: !grade.enabled });
     },
+    save,
     reset() {
       apply({ enabled: true, values: {} });
     },

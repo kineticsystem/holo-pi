@@ -207,7 +207,7 @@ print(response.json()["id"])
 
 On the web page, **Grade…**, below what the Looking Glass shows, opens the grading page of the quilt on the screen: exposure, contrast, saturation, sharpness, a tone curve, a colour mixer, the tools of StepIt Grader. The Portrait follows each slider as it moves: on a Pi 5, the server draws a change of light or colour in about 14 ms, and one of highlights, shadows, structure, detail or sharpness in about 31, after about 0.6 seconds for the first. **Show original** compares, **Reset** puts every tool back, and a double click on a slider puts back one.
 
-The grade is kept with the quilt, also after a restart, and the quilt's file stays as uploaded: **Download** gives the original. Only quilts can be graded, not videos, and only through the GPU, as the container shows them.
+The grade is kept with the quilt, also after a restart, and the quilt's file stays as uploaded: **Download** gives the original. **Save as new quilt** adds the graded quilt to the library, as a file of its own, e.g. `helix-graded_qs8x6a0.75.png`, to download and show anywhere; the original and its grade stay. Only quilts can be graded, not videos, and only through the GPU, as the container shows them.
 
 ### The Library
 
@@ -268,6 +268,7 @@ The API is on `/api`, documented by the server itself with Swagger UI on [`/api/
 | `GET /api/media/{id}/grade` | A quilt's grade, see [Grade a Quilt](#grade-a-quilt). |
 | `PUT /api/media/{id}/grade` | Grades a quilt, e.g. `{"exposure": 0.5, "saturation": 20}`. |
 | `DELETE /api/media/{id}/grade` | Removes its grade. |
+| `POST /api/media/{id}/graded-copies` | Saves the quilt with its grade, as a new quilt. |
 | `GET /api/grade-parameters` | What a grade is made of, with the ranges. |
 | `GET /api/display` | What the Looking Glass shows, whether it is on the screen, where or why not, and how a video plays. |
 | `PUT /api/display` | Shows a medium of the library, `{"media_id": ...}` or `{"media_name": ...}`, or the test pattern, `{"test_pattern": true}`. |

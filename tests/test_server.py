@@ -68,6 +68,11 @@ class GpuScreen(FakeScreen):
         self.grade = grade
         return "the fake GPU"
 
+    def grade_quilt(self, picture, layout, calibration, grade):
+        if not self.on:
+            raise RuntimeError("no screen of 1536 x 2048")
+        return 255 - picture
+
     def show_quilt_frame(self, frame, layout, calibration, reverse=False):
         self.frames_shown.append((frame.format.name, frame.width, frame.height, (layout.columns, layout.rows)))
         return "the fake GPU"
@@ -371,9 +376,10 @@ class ServerTest(ApiTest):
 
     def test_documents_every_route(self):
         spec = self.client.get("/api/openapi.json").json()
-        self.assertEqual(set(spec["paths"]), {"/api/media", "/api/media/order", "/api/media/{id}", "/api/media/{id}/content",
-                                              "/api/media/{id}/grade", "/api/grade-parameters", "/api/display",
-                                              "/api/status", "/api/calibration"})
+        self.assertEqual(set(spec["paths"]), {"/api/media", "/api/media/order", "/api/media/{id}",
+                                              "/api/media/{id}/content", "/api/media/{id}/grade",
+                                              "/api/media/{id}/graded-copies", "/api/grade-parameters",
+                                              "/api/display", "/api/status", "/api/calibration"})
         for methods in spec["paths"].values():
             for operation in methods.values():
                 self.assertTrue(operation.get("summary") and operation.get("description"), operation)
@@ -449,6 +455,54 @@ class GradeTest(ApiTest):
         self.assertEqual(self.client.delete(self.path).status_code, 204)
         self.assertIsNone(self.screen.grade)
         self.assertEqual(self.client.get(self.path).json()["exposure"], 0)
+
+    def save(self):
+        return self.client.post(f"/api/media/{self.id}/graded-copies")
+
+    def test_saves_the_graded_quilt_as_a_new_one(self):
+        self.client.put(self.path, json={"exposure": 1})
+        response = self.save()
+        self.assertEqual(response.status_code, 201, response.text)
+        saved = response.json()
+        self.assertEqual(response.headers["location"], f"/api/media/{saved['id']}")
+        self.assertEqual((saved["name"], saved["kind"], saved["columns"], saved["rows"], saved["shown"]),
+                         ("test-graded_qs8x6a0.75.png", "quilt", 8, 6, False))
+        content = self.client.get(f"/api/media/{saved['id']}/content").content
+        np.testing.assert_array_equal(np.asarray(Image.open(io.BytesIO(content))), 255 - numbered_quilt())
+        # The original, its grade and what is shown stay, and the new quilt has no grade: it is in its pixels.
+        self.assertEqual(self.client.get(self.path).json()["exposure"], 1)
+        self.assertEqual(self.client.get(f"/api/media/{self.id}/content").content, self.quilt)
+        self.assertEqual(self.client.get("/api/display").json()["media"]["id"], self.id)
+        self.assertEqual(self.client.get(f"/api/media/{saved['id']}/grade").json()["exposure"], 0)
+
+    def test_saves_each_time_under_another_name(self):
+        self.client.put(self.path, json={"exposure": 1})
+        names = [self.save().json()["name"] for _ in range(3)]
+        self.assertEqual(names, ["test-graded_qs8x6a0.75.png", "test-graded-2_qs8x6a0.75.png",
+                                 "test-graded-3_qs8x6a0.75.png"])
+        self.assertEqual(len(self.client.get("/api/media").json()["items"]), 4)
+
+    def test_saves_a_quilt_whose_name_has_no_layout_with_its_layout_and_its_order(self):
+        self.id = self.upload("plain.png", columns=8, rows=6, reverse=True).json()["id"]
+        self.client.put(f"/api/media/{self.id}/grade", json={"exposure": 1})
+        saved = self.save().json()
+        self.assertEqual((saved["name"], saved["columns"], saved["rows"], saved["reverse"]),
+                         ("plain-graded.png", 8, 6, True))
+
+    def test_saves_only_a_grade_that_changes_something(self):
+        self.assertEqual(self.save().status_code, 400)
+        self.client.put(self.path, json={"exposure": 1, "enabled": False})
+        self.assertEqual(self.save().status_code, 400)
+        self.assertEqual(len(self.client.get("/api/media").json()["items"]), 1)
+
+    def test_saving_needs_the_gpu_its_screen_and_a_known_id(self):
+        self.client.put(self.path, json={"exposure": 1})
+        self.screen.on = False
+        self.assertEqual(self.save().status_code, 503)
+        self.assertEqual(self.client.post("/api/media/00000000/graded-copies").status_code, 404)
+        _, client = self.server(FakeScreen())
+        self.assertEqual(client.post(f"/api/media/{self.id}/graded-copies").status_code, 501)
+        self.assertEqual(len(self.client.get("/api/media").json()["items"]), 1)
 
     def test_the_file_stays_as_uploaded(self):
         self.client.put(self.path, json={"exposure": 1})

@@ -13,7 +13,7 @@ function setUp() {
     await Promise.resolve();
     await Promise.resolve();
   }
-  return { sent, latest, answer };
+  return { sent, latest: latest.send, settled: latest.settled, answer };
 }
 
 test('the first value goes at once', () => {
@@ -30,6 +30,20 @@ test('while one is on its way, only the newest goes next', async () => {
   expect(sent).toEqual([1, 4]);
   await answer();
   expect(sent).toEqual([1, 4]);
+});
+
+test('it is settled once the last value is answered', async () => {
+  const { latest, settled, answer } = setUp();
+  await settled(); // Nothing on its way.
+  latest(1);
+  latest(2);
+  let done = false;
+  void settled().then(() => { done = true; });
+  await answer();
+  expect(done).toBe(false);
+  await answer();
+  await settled();
+  expect(done).toBe(true);
 });
 
 test('a value after the last answer goes at once again', async () => {

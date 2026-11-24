@@ -176,6 +176,16 @@ class Library:
         log.info("Kept %s, %s, as %s", name, item.kind, id)
         return item
 
+    def add_copy(self, source, item, suffix, extension):
+        """Keeps the picture in `source`, a binary file, as a new item beside `item`, a quilt of its layout, with
+        `suffix` in its name, and a number if the library has that name already. Returns the new item."""
+        with self.lock:
+            number, name = 1, Layout.rename(item.name, suffix, extension)
+            while self.find(name=name) is not None:
+                number += 1
+                name = Layout.rename(item.name, f"{suffix}-{number}", extension)
+            return self.add(source, name, item.columns, item.rows, item.reverse)
+
     def _inspect(self, path, name, layout, screen):
         """What the upload at `path` is: the fields of its Item but its id, name, file, size and time."""
         try:

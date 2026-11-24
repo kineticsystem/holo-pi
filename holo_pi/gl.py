@@ -371,6 +371,16 @@ class Renderer:
             self._upload([(GL_RGB8, GL_RGB, width, height, width, picture.ctypes.data)])
             self._draw(HOLOGRAM_RGB)
 
+    def graded_picture(self, picture, layout, grade):
+        """The quilt itself with a grade, an RGB array as `picture`: what is drawn does not change."""
+        from .gl_grade import GradedQuilt
+        graded = GradedQuilt(self, None, picture, layout)
+        try:
+            return graded.whole(grade)
+        finally:
+            graded.close()
+            self.gl.glUseProgram(self.program)
+
     def _drop_graded(self):
         if self.graded is not None:
             graded, self.graded = self.graded, None
@@ -497,6 +507,18 @@ class GlScreen:
         return self._call(lambda: self._present(
             calibration.width, calibration.height,
             lambda renderer: renderer.quilt_frame(frame, layout, calibration, reverse)))
+
+    def grade_quilt(self, picture, layout, calibration, grade):
+        """The quilt itself with a grade, an RGB array, worked out by the GPU: what is shown does not change."""
+        def job():
+            if self.fd is None:
+                try:
+                    self._open(calibration.width, calibration.height)
+                except (OSError, RuntimeError) as error:
+                    self._release()
+                    raise RuntimeError(str(error)) from error
+            return self.renderer.graded_picture(picture, layout, grade)
+        return self._call(job)
 
     def clear(self):
         """Shows black, if anything is shown."""

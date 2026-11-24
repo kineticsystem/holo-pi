@@ -13,6 +13,7 @@ Player's, until a quilt or another video replaces it; it is kept as a quilt is.
 See docs/API.md for the API, and http://<host>:8095/docs for the same, live.
 """
 
+import io
 import json
 import logging
 import os
@@ -30,6 +31,7 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, create_model
+from PIL import Image
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
@@ -107,7 +109,7 @@ class Video:
 
 
 class CannotGrade(ValueError):
-    """A medium that cannot be graded: a video."""
+    """A medium that cannot be graded, a video, or a quilt that has no grade to save."""
 
 
 class NoGpu(RuntimeError):
@@ -254,10 +256,7 @@ class Display:
     def set_grade(self, item, grade):
         """Keeps the grade of a library's quilt, and shows it with it at once, if it is shown. Raises CannotGrade for
         a video, and NoGpu without a GPU."""
-        if item.is_video:
-            raise CannotGrade(f"{item.name} is a {item.kind}: only a quilt can be graded")
-        if not getattr(self.screen, "grades", False):
-            raise NoGpu("grading needs a screen drawn by the GPU: start the server with --screen gl")
+        self._check_gradable(item)
         with self.lock:
             self.library.set_grade(item, grade)
             if self.quilt is not None and self.quilt.id == item.id:
@@ -265,6 +264,29 @@ class Display:
                     self._show()
                 except RuntimeError:
                     pass  # Shown with it as soon as it can be: GET /api/display says why not yet.
+
+    def save_graded(self, item):
+        """Keeps a library's quilt with its grade, as a new quilt, without showing it; the quilt and its grade stay.
+        Returns the new item. Raises CannotGrade for a video or a quilt without a grade, NoGpu without a GPU, and
+        RuntimeError if the Looking Glass is not ready."""
+        self._check_gradable(item)
+        grade = self.grade(item)
+        if not grade.changes:
+            raise CannotGrade(f"{item.name} has no grade to save, or it is switched off")
+        picture = read_quilt(self.library.path(item), item.name)
+        graded = self.screen.grade_quilt(picture, item.layout, self.calibration(), grade)
+        file = io.BytesIO()
+        # Without loss, and compressed little: a Raspberry Pi would take several times longer for a file not much
+        # smaller.
+        Image.fromarray(graded).save(file, "PNG", compress_level=1)
+        file.seek(0)
+        return self.library.add_copy(file, item, "-graded", ".png")
+
+    def _check_gradable(self, item):
+        if item.is_video:
+            raise CannotGrade(f"{item.name} is a {item.kind}: only a quilt can be graded")
+        if not getattr(self.screen, "grades", False):
+            raise NoGpu("grading needs a screen drawn by the GPU: start the server with --screen gl")
 
     # What is shown.
 
@@ -880,6 +902,27 @@ def create_app(display, web=None):
         """Shows the library's quilt of this id as uploaded again."""
         put_grade(GradeModel(), id)
         return Response(status_code=204)
+
+    @app.post("/api/media/{id}/graded-copies", tags=["grades"], response_model=MediaModel, status_code=201,
+              summary="Save a graded quilt as a new one",
+              responses={**error(400, "A video, or a quilt that has no grade, or whose grade is switched off."),
+                         **NOT_FOUND, **error(501, "The screen is not drawn by the GPU, --screen gl."),
+                         **error(503, "The Looking Glass is not ready: the GPU draws only with its screen.")})
+    def save_graded(response: Response,
+                    id: str = FastApiPath(description="The medium's id.", examples=["3f9a1c2e"])):
+        """Keeps the library's quilt of this id, with its grade, as a new quilt, a PNG of the same size and layout,
+        named e.g. helix-graded_qs8x6a0.75.png, the last of the library. It answers 201 with its Location. The quilt
+        and its grade stay as they are, and what the Looking Glass shows does not change. It takes a few seconds."""
+        try:
+            saved = display.save_graded(find(id))
+        except ValueError as problem:  # CannotGrade, or a quilt larger than the GPU takes.
+            raise HTTPException(400, str(problem)) from problem
+        except NoGpu as problem:
+            raise HTTPException(501, str(problem)) from problem
+        except RuntimeError as problem:
+            raise HTTPException(503, str(problem)) from problem
+        response.headers["Location"] = f"/api/media/{saved.id}"
+        return display.item_status(saved)
 
     # The display.
 

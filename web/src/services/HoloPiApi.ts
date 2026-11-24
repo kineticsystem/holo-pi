@@ -97,6 +97,8 @@ export interface HoloPiApi {
   getGrade(id: string, signal?: AbortSignal): Promise<Result<Grade>>;
   /** Replaces a quilt's grade; if the Looking Glass shows the quilt, it answers once it is drawn with it. */
   setGrade(id: string, grade: Grade): Promise<Result<void>>;
+  /** Keeps a quilt with its grade as a new quilt, which it answers; the quilt and what is shown stay. */
+  saveGraded(id: string): Promise<Result<Medium>>;
   getStatus(signal?: AbortSignal): Promise<Result<ServerStatus>>;
   /** Where a medium's file downloads from. */
   contentUrl(id: string): string;

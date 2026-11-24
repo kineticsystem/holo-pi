@@ -26,16 +26,20 @@ We want to grade a quilt on the Looking Glass itself: move a slider on the web p
 
 **A `PUT` per step, one at a time, the newest next.** No WebSocket: the API stays REST, and the Pi's drawing is the limit.
 
+**Save as new quilt.** It makes a new file, and never touches the original. The whole quilt goes through the same shaders, so it looks the same as while grading. It is a PNG: nothing is lost a second time. The name gets `-graded` before the layout.
+
+**A save is `POST /api/media/{id}/graded-copies`.** It creates a resource, so it is a POST on a plural noun, with `201` and a `Location`. It has no body: the page waits until its last change has reached the server.
+
 **The server lists the tools.** The page draws its sliders from `GET /api/grade-parameters`, so a new tool needs no change to the page.
 
 ## Left Out
 
 Videos. The light and colour tools would cost a video little, as they are one table. The ones that look around a pixel would not keep up with its frames.
 
-A picture of the result on the page, a histogram, copying a grade to another quilt, downloading the graded quilt.
+A picture of the result on the page, a histogram, copying a grade to another quilt.
 
 Noise reduction, chromatic aberration, HDR compression and the sharpness's radius.
 
 ## Open Items
 
-Tried on the Pi's GPU off screen only, with the whole server: 14 and 31 ms a step. How it feels on the Portrait, through the lenses and over Wi-Fi, is still to be seen.
+On the Portrait, over the network, a step takes 17 ms, or 33 with the tools that look around a pixel. How it looks through the lenses is still to be judged.

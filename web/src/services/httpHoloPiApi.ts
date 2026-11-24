@@ -56,6 +56,7 @@ export function makeHttpHoloPiApi(baseUrl = ''): HoloPiApi {
     setGrade: (id, grade) =>
       map(request<FlatGrade>(`${api}/media/${encodeURIComponent(id)}/grade`,
                              json('PUT', { ...grade.values, enabled: grade.enabled })), () => undefined),
+    saveGraded: id => request<Medium>(`${api}/media/${encodeURIComponent(id)}/graded-copies`, { method: 'POST' }),
     getStatus: signal => request<ServerStatus>(`${api}/status`, { signal }),
     upload: (file: File, options: UploadOptions, onProgress, signal) =>
       new Promise<Result<Medium>>(resolve => {

@@ -22,6 +22,9 @@ export function GradePage({ id }: { id: string }) {
           <button disabled={!grade.changed} aria-pressed={grade.showsOriginal} onClick={grade.toggleOriginal}>
             {grade.showsOriginal ? 'Show graded' : 'Show original'}
           </button>
+          <button className="primary" disabled={!grade.canSave} onClick={() => void grade.save()}>
+            {grade.saving ? 'Saving…' : 'Save as new quilt'}
+          </button>
           <ConfirmButton label="Reset" confirmLabel="Reset every tool" disabled={!grade.changed} onConfirm={grade.reset} />
         </p>
         {!grade.onScreen && (
@@ -30,6 +33,7 @@ export function GradePage({ id }: { id: string }) {
             <button disabled={display.pending} onClick={() => void display.show(id)}>Show it</button>
           </p>
         )}
+        {grade.savedName && <p className="done" role="status">Saved in the library as {grade.savedName}.</p>}
         {grade.showsOriginal && <p className="warning">The Looking Glass shows the quilt without its grade.</p>}
         <ErrorMessage text={grade.error ?? display.error} />
         {grade.loading && <p className="empty">Asking the server…</p>}

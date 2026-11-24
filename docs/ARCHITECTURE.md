@@ -194,6 +194,8 @@ Each change then takes two steps: the tools that look at a pixel alone are worke
 
 The `Renderer` keeps the `GradedQuilt` while the same picture is shown, and gives its memory back when another is, or a video. `show_quilt()` of a screen takes a grade if the screen's `grades` is true, `GlScreen`'s only. A grade at its defaults, or switched off, draws the quilt as without one, pixel for pixel.
 
+`GlScreen.grade_quilt()` gives the whole quilt with a grade, to save it: a second `GradedQuilt`, without a calibration, runs the same shaders on each pixel of the quilt, `OF_THE_QUILT`, rather than on those the screen shows, `OF_THE_SCREEN`, so that the saved quilt looks exactly as the graded one did. `GpuGradeTest` compares the two.
+
 ## The Server
 
 [`server.py`](../holo_pi/server.py) is `holo-pi serve`: FastAPI, on uvicorn, which runs on a thread of its own, while the main thread runs the screen. It shows one medium of its library at a time, a quilt or a video.
@@ -202,7 +204,7 @@ The `Renderer` keeps the `GradedQuilt` while the same picture is shown, and give
 
 - **The calibration,** read at the first need, then kept. When the drive is not mounted and the server was started with `--mount-drive`, it mounts it itself, read-only, as root, by its label, `/dev/disk/by-label/LKG-*`, under `/media/holo-pi`, with `mount_drives()` of [`calibration.py`](../holo_pi/calibration.py).
 - **The library,** see [The Library](#the-library).
-- **The grades,** kept in the library's index, `Item.grade`, and given to the screen each time the quilt is shown. `set_grade()` keeps one and shows the quilt again if it is on the screen. `Library.set_grade()` writes the index a second after the last change, and `stop()` writes what is left: a slider would wear an SD card. For the same reason, the requests that set a grade and succeed stay out of the log.
+- **The grades,** kept in the library's index, `Item.grade`, and given to the screen each time the quilt is shown. `set_grade()` keeps one and shows the quilt again if it is on the screen. `Library.set_grade()` writes the index a second after the last change, and `stop()` writes what is left: a slider would wear an SD card. `save_graded()` keeps a quilt with its grade as a new item, a PNG, without the display's lock, so that only the GPU's own work, under a second, holds up what is shown; `Library.add_copy()` finds it a name of its own. To spare the card too, the requests that set a grade and succeed stay out of the log.
 - **The tables** of the last two layouts and sizes of quilt, in memory, about 38 MB each, for a screen without a GPU: a quilt of the same layout is a lookup.
 - **What is shown:** a quilt and its picture, or a video and the `Player` that plays it, see [The Videos](#the-videos), or the test pattern, or the default quilt of `--default-quilt`. `shown.json`, in the state folder, says which medium of the library, by its id, or the test pattern; the default quilt is shown and not kept. At start, `restore()` takes it back.
 - **Whether it is shown,** where, or why not.
@@ -304,7 +306,7 @@ The page asks what the Looking Glass shows every 2 seconds, `useDisplayPolling()
 | `GlTest`, in [`test_gl.py`](../tests/test_gl.py) | The GPU's interleaving, off screen, against the processor's: a quilt, its views reversed, another layout, a video frame in YUV, a hologram copied as it is, RGB and XRGB, a quilt larger than the GPU takes, and black. Skipped without EGL and OpenGL ES 3. |
 | `GradeTest`, in [`test_grade.py`](../tests/test_grade.py) | The parameters, what of a grade is kept, its ranges, the white balance, the tone curve and the mixer. |
 | `GpuGradeTest`, in [`test_grade.py`](../tests/test_grade.py) | The GPU's grading, off screen: each tool, a nearly neutral grade within one level of the quilt as it is, the interleaving against the processor's, each view filtered alone, no rim on a black sky, and what is kept and given back between pictures. Skipped without EGL and OpenGL ES 3. |
-| `GradeTest`, in [`test_server.py`](../tests/test_server.py) | The grades through the API, with a fake GPU screen: graded at once when shown, kept when not, switched off, removed, after a restart, written after the last change, refused for a video, without a GPU or out of its range. |
+| `GradeTest`, in [`test_server.py`](../tests/test_server.py) | The grades through the API, with a fake GPU screen: graded at once when shown, kept when not, switched off, removed, saved as a new quilt, after a restart, written after the last change, refused for a video, without a GPU or out of its range. |
 
 `pnpm test`, in `web/`, runs the web page's tests, with Vitest and Testing Library, against the fake API: the store, the formatting, the steps through and the moves in a list, the hooks `useLibrary`, `useSelection`, `useDisplay` and `useUploads`, the media asked for while the screen changes, of which only the last follows, the queue's order, failures and stops, and the components, the media table with its clicks, arrow keys and rows dragged or moved with Alt, the upload's form, its drop zone and its queue.
 
@@ -366,7 +368,7 @@ Checked by hand:
 
 **Raspberry Pi's FFmpeg and Mesa in the image, on arm64.** Their FFmpeg reaches the Pi 5's hardware HEVC decoder, which Debian's does not: a detailed quilt video plays at its speed with about one core, rather than in slow motion with four. The price: the image depends on Raspberry Pi's repository on arm64, and on Raspberry Pi OS's copy of its key, kept in [`docker/`](../docker), as the copy on their web site has SHA-1 signatures, which Debian 13 refuses. On amd64 the image stays Debian's, and decodes on the processor.
 
-**Grades applied as the quilt is shown, not written into it.** A grade is a few numbers beside the file: any change can be undone, and nothing is encoded again. The price: only a screen drawn by the GPU shows it, and a download is the original.
+**Grades applied as the quilt is shown, not written into it.** A grade is a few numbers beside the file: any change can be undone, and nothing is encoded again. The price: only a screen drawn by the GPU shows it, and a download is the original, unless it is saved as a new quilt.
 
 **A table of colours and kept textures, not every tool in one shader.** Every tool for each sub-pixel would cost many times the interleaving at each step of a slider. The price: about 110 MB of the GPU's memory while a graded quilt is shown, 40 without the tools that look around, and colours interpolated in the table, within about a level of 255, more for the most saturated ones.
 

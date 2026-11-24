@@ -23,9 +23,9 @@ from ctypes import byref, c_float, c_int, c_uint
 import numpy as np
 
 from .gl import (GL_CLAMP_TO_EDGE, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER, GL_FRAMEBUFFER_BINDING,
-                 GL_FRAMEBUFFER_COMPLETE, GL_LINEAR, GL_NEAREST, GL_R16F, GL_RGB, GL_RGB8, GL_RGB10_A2, GL_RGBA16F,
-                 GL_TEXTURE0, GL_TEXTURE_2D, GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER,
-                 GL_TEXTURE_WRAP_R, GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_TRIANGLES,
+                 GL_FRAMEBUFFER_COMPLETE, GL_LINEAR, GL_NEAREST, GL_R16F, GL_RGB, GL_RGB8, GL_RGB10_A2, GL_RGBA,
+                 GL_RGBA8, GL_RGBA16F, GL_TEXTURE0, GL_TEXTURE_2D, GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER,
+                 GL_TEXTURE_MIN_FILTER, GL_TEXTURE_WRAP_R, GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_TRIANGLES,
                  GL_UNPACK_ROW_LENGTH, GL_UNSIGNED_BYTE, TEXEL, VERTEX, link_program)
 from .grade import (BAND_HUES, LMS_FROM_REC2020, OKLAB_FROM_LMS, REC2020_TO_SRGB, SPATIAL, SRGB_TO_REC2020, mixer,
                     tone_curve, white_balance)
@@ -64,13 +64,22 @@ vec3 encode(vec3 c) {  // Linear to sRGB.
 }
 """
 
-# The colour of the quilt's pixel of sub-pixel `sub`, as tones of GAMMA.
-COLOURS = HEAD + TEXEL + b"""
-uniform sampler2D quilt;
+# The quilt's pixel that is drawn: of sub-pixel `sub` of the screen, for the hologram, or the same, for the whole quilt.
+OF_THE_SCREEN = TEXEL + b"""
 uniform int sub;
+ivec2 place() { return texel(sub, gl_FragCoord.xy / screen); }
+"""
+OF_THE_QUILT = b"""
+uniform ivec2 grid, quiltSize;
+ivec2 place() { return ivec2(gl_FragCoord.xy); }
+"""
+
+# The colour of the quilt's pixel at place(), as tones of GAMMA. Goes after HEAD and one of the two above.
+COLOURS = b"""
+uniform sampler2D quilt;
 out vec4 colour;
 void main() {
-    vec3 c = texelFetch(quilt, texel(sub, gl_FragCoord.xy / screen), 0).rgb;
+    vec3 c = texelFetch(quilt, place(), 0).rgb;
     colour = vec4(pow(decode(c), vec3(1.0 / GAMMA)), 1.0);
 }
 """
@@ -171,12 +180,12 @@ void main() {
 }
 """
 
-# What the tools that look around a pixel need of the quilt's pixel of sub-pixel `sub`: its area's light, and its
-# texture's, its shapes' and its edges' gains, in stops.
-AROUND = HEAD + TEXEL + b"""
+# What the tools that look around a pixel need of the quilt's pixel at place(): its area's light, and its texture's,
+# its shapes' and its edges' gains, in stops. Goes after HEAD too.
+AROUND = b"""
 uniform sampler2D luminance, fine, coarse, guided;
 uniform ivec2 cell;
-uniform int sub, shrink;
+uniform int shrink;
 out vec4 colour;
 const float DETAIL_NOISE = 0.05, EDGE_NOISE = 0.02;  // What is smaller, in stops, is noise.
 const float LIMIT = 0.5;  // The most, in stops, before the tool's strength.
@@ -186,7 +195,7 @@ float cored(float stops, float noise) {
     return stops / sqrt(1.0 + stops * stops / (LIMIT * LIMIT));
 }
 void main() {
-    ivec2 at = texel(sub, gl_FragCoord.xy / screen);
+    ivec2 at = place();
     float l = texelFetch(luminance, at, 0).r;
     float f = texelFetch(fine, at, 0).r;
     ivec2 view = at * grid / quiltSize;
@@ -345,9 +354,10 @@ def _gaussian(sigma):
 
 
 class GradedQuilt:
-    """One quilt, drawn with one grade after another into the bound framebuffer, through a Renderer's context."""
+    """One quilt, drawn with one grade after another into the bound framebuffer, through a Renderer's context; or,
+    without a calibration, the whole quilt with a grade, whole()."""
 
-    def __init__(self, renderer, key, picture, layout, calibration, reverse):
+    def __init__(self, renderer, key, picture, layout, calibration=None, reverse=False):
         self.renderer, self.key, self.gl = renderer, key, renderer.gl
         self.picture = picture  # Kept, so that its id, in the key, is of no other.
         self.layout, self.calibration, self.reverse = layout, calibration, reverse
@@ -365,7 +375,7 @@ class GradedQuilt:
             raise
 
     def draw(self, grade):
-        """Draws the quilt with this grade."""
+        """Draws the hologram of the quilt with this grade."""
         gl, bound = self.gl, c_int()
         gl.glGetIntegerv(GL_FRAMEBUFFER_BINDING, byref(bound))
         gl.glBindFramebuffer(GL_FRAMEBUFFER, self.framebuffer)
@@ -374,6 +384,33 @@ class GradedQuilt:
         finally:
             gl.glBindFramebuffer(GL_FRAMEBUFFER, bound.value)
             gl.glViewport(0, 0, self.renderer.width, self.renderer.height)
+        self._shade(grade)
+
+    def whole(self, grade):
+        """The quilt itself with this grade, an RGB array, rows from the top: the same colours as draw()'s."""
+        gl, bound = self.gl, c_int()
+        height, width = self.picture.shape[:2]
+        gl.glGetIntegerv(GL_FRAMEBUFFER_BINDING, byref(bound))
+        gl.glBindFramebuffer(GL_FRAMEBUFFER, self.framebuffer)
+        try:
+            self._prepare(grade)
+            target = self._texture(GL_RGBA8, width, height)
+            gl.glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, target, 0)
+            self._check()
+            gl.glViewport(0, 0, width, height)
+            self._shade(grade)
+            pixels = np.empty((height, width, 4), np.uint8)
+            gl.glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.ctypes.data)
+            error = gl.glGetError()
+            if error:  # e.g. no memory left for a large quilt: better no file than a wrong one.
+                raise RuntimeError(f"the GPU cannot grade the whole quilt: OpenGL error {error:#x}")
+        finally:
+            gl.glBindFramebuffer(GL_FRAMEBUFFER, bound.value)
+            gl.glViewport(0, 0, self.renderer.width, self.renderer.height)
+        return np.ascontiguousarray(pixels[..., :3])
+
+    def _shade(self, grade):
+        gl = self.gl
         self._bind(self.screen, GL_TEXTURE_2D, {f"colour{i}": texture for i, texture in enumerate(self.colours)})
         if grade.spatial:
             self._bind(self.screen, GL_TEXTURE_2D, {f"around{i}": texture for i, texture in enumerate(self.around)}, 3)
@@ -429,8 +466,13 @@ class GradedQuilt:
         return quilt
 
     def _interleaved(self, shader, internal, sources, width, height, **values):
-        """What `shader` takes of the quilt's pixel of each sub-pixel of the screen: three textures of its size."""
-        renderer, program = self.renderer, self._program(shader)
+        """What `shader` takes of the quilt's pixel of each sub-pixel of the screen: three textures of its size. Without
+        a calibration, of each pixel of the quilt: one texture of its size, three times."""
+        renderer = self.renderer
+        if self.calibration is None:
+            values.update(grid=(self.layout.columns, self.layout.rows), quiltSize=(width, height))
+            return [self._made(HEAD + OF_THE_QUILT + shader, internal, width, height, sources, **values)] * 3
+        program = self._program(HEAD + OF_THE_SCREEN + shader)
         textures = []
         for sub in range(3):
             textures.append(self._texture(internal, renderer.width, renderer.height))
@@ -504,7 +546,7 @@ class GradedQuilt:
 
     def _program(self, fragment):
         for program in self.programs:
-            if program.fragment is fragment:
+            if program.fragment == fragment:
                 return program
         program = _Program(self.gl, fragment)
         program.fragment = fragment
