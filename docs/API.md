@@ -10,6 +10,7 @@
   - [List the Media](#list-the-media)
   - [Order the Media](#order-the-media)
   - [Get, Download and Remove a Medium](#get-download-and-remove-a-medium)
+  - [Rename a Medium](#rename-a-medium)
   - [Remove Every Medium](#remove-every-medium)
 - [The Grades](#the-grades)
   - [Grade a Quilt](#grade-a-quilt)
@@ -52,6 +53,7 @@ Requests and answers are JSON, except the upload, a multipart form, and a medium
 | `DELETE` | `/api/media` | Removes every medium. | `204` |
 | `GET` | `/api/media/{id}` | What a medium is. | `200`, `404` |
 | `GET` | `/api/media/{id}/content` | Its file, as uploaded. | `200`, `404` |
+| `PUT` | `/api/media/{id}/name` | Renames it. | `200`, `400`, `404`, `409` |
 | `DELETE` | `/api/media/{id}` | Removes it. | `204`, `404` |
 | `GET` | `/api/media/{id}/grade` | A quilt's grade. | `200`, `404` |
 | `PUT` | `/api/media/{id}/grade` | Grades a quilt. | `200`, `400`, `404`, `501` |
@@ -190,6 +192,26 @@ curl -OJ http://holo.local:8095/api/media/8299c881/content
 ```
 
 `DELETE /api/media/{id}` removes it from the library, its file too, and answers `204`, with no body. If the Looking Glass shows it, it shows black. All three answer `404` for an id the library does not have.
+
+### Rename a Medium
+
+```
+PUT /api/media/{id}/name
+Content-Type: application/json
+```
+
+```json
+{"name": "my helix_qs8x6a0.75.mp4"}
+```
+
+Gives the medium another name, and answers the [medium](#the-medium). Its file, its id, its layout, its grade and its place in the library stay, and what the Looking Glass shows does not change. A layout in the new name is only text: the medium keeps the one it was uploaded with. The name keeps its file's extension: `my helix` becomes `my helix.mp4`.
+
+| Status | When | Body |
+|---|---|---|
+| `200` | The medium has this name. | The [medium](#the-medium). |
+| `400` | A name no file can have: empty, longer than 255 bytes, or with a slash, a backslash or a control character. | An [error](#errors). |
+| `404` | An id the library does not have. | An [error](#errors). |
+| `409` | Another medium has this name. | An [error](#errors). Nothing is replaced. |
 
 ### Remove Every Medium
 
@@ -391,8 +413,9 @@ Every error has the same body, with what went wrong and what to check:
 
 | Status | Meaning |
 |---|---|
-| `400` | The request cannot work, whatever the Looking Glass: not an image nor a video, no layout, a hologram video of another size, a video to grade, no grade to save, or nothing to show. |
+| `400` | The request cannot work, whatever the Looking Glass: not an image nor a video, no layout, a hologram video of another size, a name no file can have, a video to grade, no grade to save, or nothing to show. |
 | `404` | No medium of this id or name. |
+| `409` | Another medium has the new name. |
 | `422` | A field is missing, of the wrong type or out of its range: `{"error": "invalid request: body.columns: ..."}`. |
 | `501` | A video, and the server has no PyAV; or a grade, and the screen is not drawn by the GPU. |
 | `503` | The Looking Glass is not ready: no calibration, no screen of its size, or the screen is held by a desktop. See [Troubleshooting](../README.md#troubleshooting). |

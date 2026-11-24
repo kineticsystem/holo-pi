@@ -100,6 +100,15 @@ export class FakeHoloPiApi implements HoloPiApi {
     return this.listMedia();
   }
 
+  renameMedium(id: string, name: string): Promise<Result<Medium>> {
+    if (this.failWith) return Promise.resolve(err(this.failWith));
+    if (this.media.some(m => m.name === name && m.id !== id)) return Promise.resolve(err(`the library has another ${name}`));
+    this.media = this.media.map(m => (m.id === id ? { ...m, name } : m));
+    const renamed = this.media.find(m => m.id === id)!;
+    if (this.display.media?.id === id) this.display = { ...this.display, media: renamed, name };
+    return Promise.resolve(ok(renamed));
+  }
+
   removeMedium(id: string): Promise<Result<void>> {
     if (this.refusing.has(id)) return Promise.resolve(err(`cannot remove ${id}`));
     this.media = this.media.filter(m => m.id !== id);

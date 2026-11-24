@@ -42,9 +42,15 @@ log = logging.getLogger(__name__)
 
 QUILT, QUILT_VIDEO, HOLOGRAM_VIDEO = "quilt", "quilt video", "hologram video"
 INDEX = "index.json"
+# The longest name, in bytes: what the file systems a download goes to take.
+LONGEST_NAME = 255
 # How long after the last change of a grade the index is written: a slider changes it many times a second, and the
 # disk of a Raspberry Pi is often an SD card.
 SAVE_S = 1
+
+
+class NameTaken(ValueError):
+    """Another item of the library has the name."""
 
 
 class QuiltError(ValueError):
@@ -247,6 +253,33 @@ class Library:
                 self._save()
             except OSError as error:
                 log.warning("Cannot keep the grades in %s: %s", self.folder, error)
+
+    def rename(self, item, name):
+        """Gives an item another name; its file, its id, its layout, its grade and its place stay. The name keeps the
+        file's extension, added if it is not there, as a download needs it. Raises ValueError for a name no file can
+        have, and NameTaken for one another item has."""
+        name = name.strip()
+        extension = re.search(r"\.[A-Za-z][A-Za-z0-9]{0,7}$", item.name)  # Not .75 of a name that ends in its layout.
+        if extension and name and not name.lower().endswith(extension.group().lower()):
+            name += extension.group()
+        stem = name[:-len(extension.group())] if extension else name
+        if not stem.strip(" ."):
+            raise ValueError("a name cannot be empty")
+        if not name.isprintable() or re.search(r'[/\\]', name):
+            raise ValueError("a name cannot have a slash, a backslash or a control character")
+        if len(name.encode()) > LONGEST_NAME:
+            raise ValueError(f"a name cannot be longer than {LONGEST_NAME} bytes")
+        with self.lock:
+            other = self.find(name=name)
+            if other is not None and other.id != item.id:
+                raise NameTaken(f"the library has another {name}")
+            before, item.name = item.name, name
+            try:
+                self._save()
+            except OSError:
+                item.name = before
+                raise
+        return item
 
     def reorder(self, ids):
         """Puts the items in the order of `ids`: each of the library's ids once. Raises KeyError, its message the

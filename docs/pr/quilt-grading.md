@@ -1,10 +1,12 @@
-# Grade a Quilt on the Looking Glass
+# Grade a Quilt on the Looking Glass, and Rename a Medium
 
-Branch `quilt-grading`. Experimental.
+Branch `quilt-grading`. The grading is experimental.
 
 ## Goal
 
 We want to grade a quilt on the Looking Glass itself: move a slider on the web page, see the hologram change. It must feel immediate, run on the Pi, and leave the page as it is, but for one button.
+
+A medium has the name of the file uploaded. We also want to change it, for any medium, e.g. a graded quilt just saved.
 
 ## Decisions
 
@@ -32,6 +34,20 @@ We want to grade a quilt on the Looking Glass itself: move a slider on the web p
 
 **The server lists the tools.** The page draws its sliders from `GET /api/grade-parameters`, so a new tool needs no change to the page.
 
+### Renaming
+
+**Rename, on each row, changes the name in place.** The part before the layout is selected, as it is the one we mostly change. Enter takes it, Escape leaves it. Showing, moving and the arrow keys of the table do not react to the text being typed.
+
+**`PUT /api/media/{id}/name`.** The name is a singleton under the medium: no verb in the path, and no PATCH, which the API does not use.
+
+**A name already taken is refused, `409`.** An upload of a name the library has replaces that medium. A rename must not: we would lose a file by a typing mistake. The form stays open, with what was typed.
+
+**The extension stays.** A download needs it. If the new name lacks it, the server adds it.
+
+**The layout does not follow the name.** The library knows each medium's layout from its upload. `_qs5x9` typed in a name does not change how the quilt is shown.
+
+**Only `index.json` changes.** The file is named by its id. The display takes the name of what it shows from the library, so what is on the Looking Glass does not change.
+
 ## Left Out
 
 Videos. The light and colour tools would cost a video little, as they are one table. The ones that look around a pixel would not keep up with its frames.
@@ -43,3 +59,5 @@ Noise reduction, chromatic aberration, HDR compression and the sharpness's radiu
 ## Open Items
 
 On the Portrait, over the network, a step takes 17 ms, or 33 with the tools that look around a pixel. How it looks through the lenses is still to be judged.
+
+The README's picture of the web page is older than **Grade…** and **Rename**. It shows a real Pi, so it is to be taken again there.

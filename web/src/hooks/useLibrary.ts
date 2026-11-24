@@ -1,5 +1,5 @@
 // The library's view model: the media, the space they take, which one is shown, and the commands to read the list
-// again, put it in another order, remove one, several, or them all. Used by the library panel.
+// again, put it in another order, rename one, remove one, several, or them all. Used by the library panel.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { selectShownId } from '../model/holoPiStore';
 import { useHoloPiStore } from '../model/HoloPiStoreContext';
@@ -63,6 +63,19 @@ export function useLibrary() {
     }
   }
 
+  // Whether it went: a name the server refuses, e.g. another medium's, stays to be corrected.
+  async function rename(id: string, name: string): Promise<boolean> {
+    const result = await api.renameMedium(id, name);
+    if (!result.ok) {
+      setError(result.error);
+      return false;
+    }
+    setError(null);
+    dispatch({ type: 'mediumRenamed', medium: result.value });
+    if (selectShownId(state) === id) await refreshDisplay(); // It says the name too.
+    return true;
+  }
+
   async function removeAll() {
     if (!state.media?.length) return;
     setBusy(true);
@@ -76,7 +89,7 @@ export function useLibrary() {
     await refreshDisplay();
   }
 
-  // Removing the medium shown shows black: the display says so at once.
+  // Removing the medium shown shows black, and renaming it changes its name there: the display says so at once.
   async function refreshDisplay() {
     const display = await api.getDisplay();
     if (display.ok) dispatch({ type: 'displayRead', display: display.value });
@@ -95,6 +108,7 @@ export function useLibrary() {
     removeMany,
     removeAll,
     reorder,
+    rename,
     contentUrl: api.contentUrl,
   };
 }

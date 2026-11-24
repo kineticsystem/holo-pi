@@ -13,6 +13,7 @@ export type HoloPiState = {
 export type HoloPiAction =
   | { type: 'mediaListed'; list: MediaList }
   | { type: 'mediumUploaded'; medium: Medium }
+  | { type: 'mediumRenamed'; medium: Medium }
   | { type: 'mediumRemoved'; id: string }
   | { type: 'mediaOrdered'; ids: string[] }
   | { type: 'allMediaRemoved' }
@@ -35,6 +36,8 @@ export function holoPiReducer(state: HoloPiState, action: HoloPiAction): HoloPiS
         : [...others, action.medium];
       return { ...state, media, size, free: Math.max(0, state.free - (size - state.size)) };
     }
+    case 'mediumRenamed':
+      return { ...state, media: (state.media ?? []).map(m => (m.id === action.medium.id ? action.medium : m)) };
     case 'mediumRemoved': {
       const removed = (state.media ?? []).find(medium => medium.id === action.id);
       const media = (state.media ?? []).filter(medium => medium.id !== action.id);

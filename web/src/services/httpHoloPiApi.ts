@@ -44,6 +44,7 @@ export function makeHttpHoloPiApi(baseUrl = ''): HoloPiApi {
     contentUrl: id => `${api}/media/${encodeURIComponent(id)}/content`,
     listMedia: signal => request<MediaList>(`${api}/media`, { signal }),
     orderMedia: ids => request<MediaList>(`${api}/media/order`, json('PUT', { ids })),
+    renameMedium: (id, name) => request<Medium>(`${api}/media/${encodeURIComponent(id)}/name`, json('PUT', { name })),
     removeMedium: id => request<void>(`${api}/media/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     removeAllMedia: () => request<void>(`${api}/media`, { method: 'DELETE' }),
     getDisplay: signal => request<Display>(`${api}/display`, { signal }),

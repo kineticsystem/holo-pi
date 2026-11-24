@@ -206,6 +206,58 @@ class MediaTest(ApiTest):
             self.assertIn(words, response.json()["error"])
         self.assertEqual([item["id"] for item in self.client.get("/api/media").json()["items"]], [a, b])
 
+    def rename(self, id, name):
+        return self.client.put(f"/api/media/{id}/name", json={"name": name})
+
+    def test_renames_a_medium_and_keeps_the_rest(self):
+        before = self.upload().json()
+        response = self.rename(before["id"], "  my héron_qs8x6a0.75.png ")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json(), dict(before, name="my héron_qs8x6a0.75.png"))
+        content = self.client.get(f"/api/media/{before['id']}/content")
+        self.assertEqual(content.content, self.quilt)
+        self.assertIn("my%20h%C3%A9ron_qs8x6a0.75.png", content.headers["content-disposition"])
+        self.assertEqual(self.show(media_name="my héron_qs8x6a0.75.png").status_code, 200)
+        self.assertEqual(self.show(media_name=before["name"]).status_code, 404)
+        self.assertEqual(self.client.get(f"/api/media/{before['id']}").json()["columns"], 8)
+
+    def test_a_rename_is_kept_after_a_restart(self):
+        id = self.upload().json()["id"]
+        self.rename(id, "other.png")
+        _, client = self.server(FakeScreen())
+        self.assertEqual(client.get(f"/api/media/{id}").json()["name"], "other.png")
+
+    def test_renaming_what_is_shown_leaves_it_shown_under_its_new_name(self):
+        id = self.upload(play=True).json()["id"]
+        frames = self.screen.frames
+        self.rename(id, "other.png")
+        status = self.client.get("/api/display").json()
+        self.assertEqual((status["name"], status["media"]["name"], status["shown"]), ("other.png", "other.png", True))
+        self.assertEqual(self.screen.frames, frames)
+
+    def test_a_new_name_keeps_the_extension(self):
+        id = self.upload().json()["id"]
+        for name, kept in [("wasp", "wasp.png"), ("wasp.PNG", "wasp.PNG"), ("wasp_qs8x6a0.75", "wasp_qs8x6a0.75.PNG"),
+                           ("wasp.jpg", "wasp.jpg.PNG")]:
+            self.assertEqual(self.rename(id, name).json()["name"], kept)
+
+    def test_refuses_a_name_no_file_can_have(self):
+        before = self.upload().json()
+        for name in ("", "   ", ".png", " .png", "..", "a/b.png", "a\\b.png", "a\nb.png", "a" * 300):
+            response = self.rename(before["id"], name)
+            self.assertEqual(response.status_code, 400, name)
+            self.assertIn("a name cannot", response.json()["error"])
+        self.assertEqual(self.client.get(f"/api/media/{before['id']}").json()["name"], before["name"])
+
+    def test_refuses_the_name_of_another_medium_but_not_its_own(self):
+        id = self.upload().json()["id"]
+        other = self.upload("other_qs8x6a0.75.png").json()
+        response = self.rename(id, other["name"])
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("another other_qs8x6a0.75.png", response.json()["error"])
+        self.assertEqual(self.rename(other["id"], other["name"]).status_code, 200)
+        self.assertEqual(self.rename("00000000", "new.png").status_code, 404)
+
     def test_gives_a_medium_and_its_content(self):
         item = self.upload().json()
         self.assertEqual(self.client.get(f"/api/media/{item['id']}").json()["name"], "test_qs8x6a0.75.png")
@@ -377,8 +429,9 @@ class ServerTest(ApiTest):
     def test_documents_every_route(self):
         spec = self.client.get("/api/openapi.json").json()
         self.assertEqual(set(spec["paths"]), {"/api/media", "/api/media/order", "/api/media/{id}",
-                                              "/api/media/{id}/content", "/api/media/{id}/grade",
-                                              "/api/media/{id}/graded-copies", "/api/grade-parameters",
+                                              "/api/media/{id}/content", "/api/media/{id}/name",
+                                              "/api/media/{id}/grade", "/api/media/{id}/graded-copies",
+                                              "/api/grade-parameters",
                                               "/api/display", "/api/status", "/api/calibration"})
         for methods in spec["paths"].values():
             for operation in methods.values():
@@ -556,6 +609,12 @@ class GradeTest(ApiTest):
         self.display.retry()
         self.assertEqual(self.screen.grade.values, {"exposure": 1})
         self.assertTrue(self.client.get("/api/display").json()["shown"])
+
+    def test_a_renamed_quilt_keeps_its_grade(self):
+        self.client.put(self.path, json={"exposure": 1})
+        self.client.put(f"/api/media/{self.id}/name", json={"name": "other_qs8x6a0.75.png"})
+        self.assertEqual(self.client.get(self.path).json()["exposure"], 1)
+        self.assertEqual(self.save().json()["name"], "other-graded_qs8x6a0.75.png")
 
     @unittest.skipIf(hologram_video is None, "no PyAV")
     def test_a_video_cannot_be_graded(self):

@@ -86,6 +86,8 @@ export interface HoloPiApi {
          signal?: AbortSignal): Promise<Result<Medium>>;
   /** Puts the library in the order of `ids`, each of its ids once; answers the list as it is now. */
   orderMedia(ids: string[]): Promise<Result<MediaList>>;
+  /** Gives a medium another name; answers it as it is now, its extension added if the name lacks it. */
+  renameMedium(id: string, name: string): Promise<Result<Medium>>;
   removeMedium(id: string): Promise<Result<void>>;
   removeAllMedia(): Promise<Result<void>>;
   getDisplay(signal?: AbortSignal): Promise<Result<Display>>;

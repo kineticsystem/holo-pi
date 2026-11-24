@@ -7,14 +7,15 @@ import { MediaTable } from './MediaTable';
 function setUp(shownId: string | null = null, selected: string[] = [], currentId: string | null = shownId) {
   const onShow = vi.fn();
   const onMove = vi.fn();
+  const onRename = vi.fn((_id: string, _name: string) => Promise.resolve(true));
   const onRemove = vi.fn();
   const onSelect = vi.fn();
   const onSelectAll = vi.fn();
   render(<MediaTable media={[medium({ id: 'a', name: 'helix_qs8x6a0.75.mp4' }), medium({ id: 'b', name: 'old.mp4', codec: 'h264', warning: 'not H.265' }),
                              medium({ id: 'c', name: 'knot_qs8x6a0.75.jpg', kind: 'quilt' })]}
                      shownId={shownId} currentId={currentId} selected={selected} disabled={false} contentUrl={id => `/api/media/${id}/content`}
-                     onShow={onShow} onMove={onMove} onRemove={onRemove} onSelect={onSelect} onSelectAll={onSelectAll} />);
-  return { onShow, onMove, onRemove, onSelect, onSelectAll };
+                     onShow={onShow} onMove={onMove} onRename={onRename} onRemove={onRemove} onSelect={onSelect} onSelectAll={onSelectAll} />);
+  return { onShow, onMove, onRename, onRemove, onSelect, onSelectAll };
 }
 
 test('a click on a row shows its medium, and there is no play button', async () => {
@@ -76,7 +77,7 @@ test('downloads come from the server', () => {
 
 test('an empty library says how to fill it', () => {
   render(<MediaTable media={[]} shownId={null} currentId={null} selected={[]} disabled={false} contentUrl={() => ''}
-                     onShow={() => {}} onMove={() => {}} onRemove={() => {}} onSelect={() => {}} onSelectAll={() => {}} />);
+                     onShow={() => {}} onMove={() => {}} onRename={() => Promise.resolve(true)} onRemove={() => {}} onSelect={() => {}} onSelectAll={() => {}} />);
   expect(screen.getByText(/upload a quilt or a video/)).toBeInTheDocument();
 });
 
@@ -163,5 +164,18 @@ test('with nothing current, Alt and an arrow move nothing', async () => {
   const { onMove } = setUp();
   screen.getByRole('table').focus();
   await userEvent.keyboard('{Alt>}{ArrowDown}{/Alt}');
+  expect(onMove).not.toHaveBeenCalled();
+});
+
+test('a row is renamed in place, without showing it', async () => {
+  const { onRename, onShow, onMove } = setUp('a');
+  await userEvent.click(screen.getByRole('button', { name: 'Rename old.mp4' }));
+  await userEvent.click(screen.getByRole('textbox', { name: 'New name of old.mp4' }));
+  await userEvent.keyboard('{ArrowDown}');
+  await userEvent.clear(screen.getByRole('textbox'));
+  await userEvent.keyboard('new.mp4{Enter}');
+  expect(onRename).toHaveBeenCalledWith('b', 'new.mp4');
+  expect(screen.queryByRole('textbox')).toBeNull();
+  expect(onShow).not.toHaveBeenCalled();
   expect(onMove).not.toHaveBeenCalled();
 });

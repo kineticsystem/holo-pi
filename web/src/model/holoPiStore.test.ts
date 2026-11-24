@@ -26,6 +26,12 @@ describe('the store', () => {
     expect([state.size, state.free]).toEqual([three.size, three.free]);
   });
 
+  test('a medium renamed keeps its place and its space', () => {
+    const state = holoPiReducer(listed, { type: 'mediumRenamed', medium: medium({ id: 'a', size: 100, name: 'new.mp4' }) });
+    expect(state.media?.map(m => [m.id, m.name])).toEqual([['a', 'new.mp4'], ['b', 'helix_qs8x6a0.75.mp4']]);
+    expect([state.size, state.free]).toEqual([150, 1000]);
+  });
+
   test('a removal gives its space back', () => {
     const state = holoPiReducer(listed, { type: 'mediumRemoved', id: 'a' });
     expect(state.media?.map(m => m.id)).toEqual(['b']);

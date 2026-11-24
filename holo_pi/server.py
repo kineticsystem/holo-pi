@@ -39,7 +39,7 @@ from .calibration import find_calibration, load_calibration, mount_drives
 from .grade import PARAMETERS, Grade
 from .interleave import Interleaver
 from .layout import Layout
-from .library import HOLOGRAM_VIDEO, QUILT, QUILT_VIDEO, Library, QuiltError
+from .library import HOLOGRAM_VIDEO, QUILT, QUILT_VIDEO, Library, NameTaken, QuiltError
 from .numbers import numbers_quilt
 from .quilt import read_quilt
 from .screen import open_screen
@@ -531,7 +531,8 @@ class Display:
                 item = self.library.find(id=video.id)
                 shown_on = player.shown_on if player else None
                 rate = player.frame_rate() if player else None
-                return dict(nothing, source=MEDIA, media=item and self.item_status(item), name=video.name,
+                return dict(nothing, source=MEDIA, media=item and self.item_status(item),
+                            name=item.name if item else video.name,
                             kind=QUILT_VIDEO if video.columns else HOLOGRAM_VIDEO, reverse=video.reverse,
                             shown=shown_on is not None, shown_on=shown_on,
                             error=(player.error if player else self.video_error) if shown_on is None else None,
@@ -541,7 +542,8 @@ class Display:
                 quilt = self.quilt
                 item = self.library.find(id=quilt.id) if quilt.id else None
                 source = MEDIA if quilt.id else TEST_PATTERN if quilt.name == NUMBERS else DEFAULT
-                return dict(nothing, source=source, media=item and self.item_status(item), name=quilt.name,
+                return dict(nothing, source=source, media=item and self.item_status(item),
+                            name=item.name if item else quilt.name,
                             kind=QUILT, reverse=quilt.reverse, shown=self.shown_on is not None,
                             shown_on=self.shown_on, error=self.error)
             return nothing
@@ -647,6 +649,11 @@ class MediaListModel(BaseModel):
 class OrderRequest(BaseModel):
     ids: list[str] = Field(description="Every id of the library, once, in the order wanted.",
                            examples=[["8299c881", "3f9a1c2e"]])
+
+
+class NameRequest(BaseModel):
+    name: str = Field(description="The new name. The file's extension is added if it is not there.",
+                      examples=["my helix_qs8x6a0.75.mp4"])
 
 
 class DisplayModel(BaseModel):
@@ -857,6 +864,20 @@ def create_app(display, web=None):
         """The library's medium of this id, its file as uploaded."""
         item = find(id)
         return FileResponse(display.library.path(item), filename=item.name)
+
+    @app.put("/api/media/{id}/name", tags=["media"], response_model=MediaModel, summary="Rename a medium",
+             responses={**error(400, "A name no file can have: empty, too long, or with a slash."), **NOT_FOUND,
+                        **error(409, "Another medium has this name.")})
+    def put_name(request: NameRequest, id: str = FastApiPath(description="The medium's id.", examples=["3f9a1c2e"])):
+        """Gives the library's medium of this id another name. Its file, its id, its layout, its grade and its place
+        stay, and what the Looking Glass shows does not change. A layout in the new name, e.g. _qs8x6a0.75, is only
+        text: the medium keeps the layout it was uploaded with."""
+        try:
+            return display.item_status(display.library.rename(find(id), request.name))
+        except NameTaken as problem:
+            raise HTTPException(409, str(problem)) from problem
+        except ValueError as problem:
+            raise HTTPException(400, str(problem)) from problem
 
     @app.delete("/api/media/{id}", tags=["media"], status_code=204, summary="Remove a medium", responses=NOT_FOUND)
     def remove_medium(id: str = FastApiPath(description="The medium's id.", examples=["3f9a1c2e"])):

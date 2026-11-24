@@ -224,7 +224,7 @@ FastAPI makes the OpenAPI description from the routes, their docstrings and thei
 1. **An image** Pillow reads is a quilt, which needs a layout, from its name or its fields; otherwise `QuiltError`, `400`.
 2. **A video** PyAV reads is a quilt video with a layout, or a hologram video without one, whose size is checked against the screen's when the calibration is known; otherwise `VideoError`, `400`.
 
-A name is unique, so that it addresses a medium as its id does: an upload of a name the library has replaces it, and keeps its id and its place, so that `shown.json` and a client's list still point to it.
+A name is unique, so that it addresses a medium as its id does: an upload of a name the library has replaces it, and keeps its id and its place, so that `shown.json` and a client's list still point to it. `Library.rename()` gives a medium another name, in `index.json` only, as its file is named by its id; it keeps the extension, and refuses a name another medium has, where an upload would replace that one. `Display` takes the name of what it shows from the library, so a rename needs nothing more there.
 
 The order of `index.json` is the library's order, the one `GET /api/media` lists and the web page shows: a new medium goes last, and `Library.reorder()`, for `PUT /api/media/order`, puts the media in another. It takes the whole order, every id once, and refuses one that misses an id, e.g. a list read before another client uploaded: it does not guess where a medium it was not told about goes. The ids are 8 random hexadecimal digits. A version before the library kept one quilt or video in the state folder, `quilt.json` or `video.json`: at the first start, `restore()` takes it into the library.
 
@@ -264,7 +264,7 @@ The player never takes the lock of `Display`: `Display` stops it, under its lock
 
 ## The Web Page
 
-[`web/`](../web/README.md) is a page to try HoloPi without knowing the API: what the Looking Glass shows, the library, to show a medium with a click on its row or the arrow keys, move it by dragging its grip or with Alt and the arrow keys, download or remove it, or remove those ticked in one go, and uploads, one file or many, dropped or chosen. It uses the API only, as any client, and links its documentation. React, TypeScript, Vite and pnpm, as the web pages of the StepIt projects, with no other library; it follows the `react-developer` skill:
+[`web/`](../web/README.md) is a page to try HoloPi without knowing the API: what the Looking Glass shows, the library, to show a medium with a click on its row or the arrow keys, move it by dragging its grip or with Alt and the arrow keys, rename, download or remove it, or remove those ticked in one go, and uploads, one file or many, dropped or chosen. It uses the API only, as any client, and links its documentation. React, TypeScript, Vite and pnpm, as the web pages of the StepIt projects, with no other library; it follows the `react-developer` skill:
 
 | Folder | What it holds |
 |---|---|

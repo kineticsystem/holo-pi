@@ -87,3 +87,5 @@ label.slider span, label.slider output { color: var(--muted); }
 label.slider output { font-variant-numeric: tabular-nums; }
 label.slider.changed span, label.slider.changed output { color: var(--text); }
 label.slider input { grid-column: 1 / -1; width: 100%; margin: 0.2rem 0; accent-color: var(--accent); }
+form.rename { display: flex; flex-wrap: wrap; gap: 0.4rem; cursor: default; }
+form.rename input { font: inherit; max-width: 100%; box-sizing: border-box; background: #12151a; color: var(--text); border: 1px solid var(--accent); border-radius: 4px; padding: 0.2rem 0.4rem; }
