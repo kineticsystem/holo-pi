@@ -14,6 +14,7 @@
 - [Use HoloPi](#use-holopi)
   - [The Web Page](#the-web-page)
   - [Show a Quilt](#show-a-quilt)
+  - [Grade a Quilt](#grade-a-quilt)
   - [The Library](#the-library)
   - [Play a Video](#play-a-video)
   - [Make a Quilt Video](#make-a-quilt-video)
@@ -45,7 +46,7 @@ The hologram is a quilt, the format of Looking Glass's still holograms: one imag
 - shows that image on the Portrait, pixel for pixel, straight through the Pi's HDMI, with no desktop and no window;
 - keeps every quilt in a library on its disk, to show again by its id or its name, at once, and shows the last one again after the Pi restarts, or a test quilt until the first one comes.
 
-It also plays videos of quilts in a loop, interleaving each frame on the Pi's GPU as it is shown, and videos already interleaved for the Portrait, as the ones the Portrait keeps on its own drive, see [Play a Video](#play-a-video). Its web page shows it all, and uploads, see [The Web Page](#the-web-page).
+It also plays videos of quilts in a loop, interleaving each frame on the Pi's GPU as it is shown, and videos already interleaved for the Portrait, as the ones the Portrait keeps on its own drive, see [Play a Video](#play-a-video). Its web page shows it all, and uploads, see [The Web Page](#the-web-page), and grades quilts while the Portrait shows them, see [Grade a Quilt](#grade-a-quilt).
 
 <!-- The source is docs/diagrams/overview.mmd: change it, then run bin/render-diagrams.sh. -->
 <p align="center"><img src="docs/diagrams/overview.svg" alt="Any computer on the network, a browser, curl or a script, uploads a quilt or a video with POST /api/media and shows it with PUT /api/display on HoloPi's server, which runs in Docker on the Raspberry Pi, holo.local, keeps its library and its web page, and draws on the Looking Glass Portrait over HDMI with the GPU; the Portrait gives the server its calibration over USB." width="404"></p>
@@ -157,7 +158,7 @@ Reboot. The login prompt is only of use with a keyboard and a user with a passwo
 
 ### The Web Page
 
-The Pi serves a web page, on the same port as its API: http://holo.local:8095, or the Pi's address, e.g. http://192.168.100.41:8095. It shows what the Looking Glass shows, with a video's frame rate and decoder, and the media kept on the Pi: a click on a row shows it, the arrow keys show the one above or below, a row dragged by its grip, ⠿, or moved with Alt and the arrow keys, puts the library in another order, and each can be downloaded or removed, one, those ticked or all at once; quilts and videos dropped on it, one or many, are uploaded, and the first is shown at once. Its header links the API's documentation.
+The Pi serves a web page, on the same port as its API: http://holo.local:8095, or the Pi's address, e.g. http://192.168.100.41:8095. It shows what the Looking Glass shows, with a video's frame rate and decoder, and the media kept on the Pi: a click on a row shows it, the arrow keys show the one above or below, a row dragged by its grip, ⠿, or moved with Alt and the arrow keys, puts the library in another order, and each can be renamed, downloaded or removed, one, those ticked or all at once; quilts and videos dropped on it, one or many, are uploaded, and the first is shown at once. Its header links the API's documentation.
 
 <p align="center"><img src="docs/images/web-page.png" alt="HoloPi's web page: on the left, what the Looking Glass shows, the helix quilt video at 23.2 of 24 frames per second with the hardware decoder, and the upload, an area to drop files on with their layout; on the right, the library of five quilts and quilt videos, each row with a box to tick, Download and Remove, the helix video's row marked on screen." width="700"></p>
 
@@ -199,6 +200,39 @@ response.raise_for_status()
 print(response.json()["id"])
 ```
 
+### Grade a Quilt
+
+Grading changes a quilt's light and colours while the Portrait shows it. Show a quilt of the library, then click **Grade…**, below what the Looking Glass shows. The grading page opens, and the Portrait follows each slider as it moves:
+
+<p align="center"><img src="docs/images/grading-page.png" alt="HoloPi's grading page, for the orrery quilt: buttons to go back to the library, show the original, save as a new quilt and reset; below, the sliders in sections, Color, Light, Tone Curve, the folded Color Mixer, and Effects, with temperature, vibrance, exposure, contrast, highlights, shadows, structure and sharpness changed." width="700"></p>
+
+The tools are those of StepIt Grader, our desktop program that grades photographs:
+
+| Section | Tools |
+|---|---|
+| Color | Temperature, tint, vibrance, saturation. |
+| Light | Exposure, in stops, contrast, highlights, shadows, blacks. |
+| Tone Curve | Shadows, darks, lights and highlights, and the tones where these zones meet. |
+| Color Mixer | The hue, saturation and luminance of eight colours, from red to magenta, folded at first. |
+| Effects | Structure, detail, sharpness. |
+
+A double click on a slider puts its default back. The buttons at the top:
+
+- **Show original** shows the quilt without its grade, to compare; **Show graded**, or moving a slider, brings the grade back.
+- **Save as new quilt** adds the graded quilt to the library, as a file of its own, a PNG named e.g. `helix-graded_qs8x6a0.75.png`, to download and show on any Looking Glass. The original and its grade stay. It takes about a second on a Pi 5.
+- **Reset** puts every tool back to its default.
+- **← Library** goes back.
+
+There is nothing else to save: the server keeps the grade with the quilt as we work, also across a restart, and never changes the quilt's file, so **Download** gives the original. An upload of the same name replaces the quilt and drops its grade.
+
+The Pi's GPU works the grade out as it draws. On a Pi 5, measured with a Portrait over the network, a step of a slider takes about 17 ms for light and colour, and about 33 for highlights, shadows, structure, detail and sharpness, which take about half a second the first time one of them is used on a quilt. Only quilts can be graded, not videos, and only through the GPU, `--screen gl`, as the container shows them; otherwise **Grade…** is disabled and says why.
+
+A script grades with [the API](docs/API.md#the-grades):
+
+```bash
+curl -X PUT -H "Content-Type: application/json" -d '{"exposure": 0.5, "saturation": 20}' http://holo.local:8095/api/media/<id>/grade
+```
+
 ### The Library
 
 Every upload stays on the Pi, in its library, until it is removed: without `play`, an upload is only kept, and what the Looking Glass shows does not change. Show one later by its id or its name, at once, with nothing sent but its name:
@@ -209,6 +243,8 @@ curl -X PUT -H "Content-Type: application/json" -d '{"media_name": "helix_qs8x6a
 
 On a Pi 5, a quilt is on the Looking Glass about 0.8 seconds later, a video about 0.2 seconds later, where uploading a 120 MB video takes about 2.5 seconds over gigabit Ethernet. An upload of a name the library has replaces it, and keeps its id and its place in the list.
 
+**Rename**, on a medium's row of the web page, changes its name in place: Enter takes it, Escape leaves it. Its file, its grade, its place and what the Looking Glass shows stay. A name another medium has is refused, and the extension stays. The medium keeps its layout even if the new name no longer says it, e.g. without `_qs8x6a0.75`, but another program that reads a downloaded copy would not know it.
+
 | Request | What it does |
 |---|---|
 | `GET /api/media` | Lists the library, with the space it takes and the space left. |
@@ -216,6 +252,7 @@ On a Pi 5, a quilt is on the Looking Glass about 0.8 seconds later, a video abou
 | `PUT /api/media/order` | Puts the library in another order, `{"ids": [...]}`, every id once. |
 | `GET /api/media/{id}` | Says what a medium is. |
 | `GET /api/media/{id}/content` | Downloads its file, as uploaded. |
+| `PUT /api/media/{id}/name` | Renames it, `{"name": ...}`. |
 | `DELETE /api/media/{id}` | Removes it, its file too. |
 | `DELETE /api/media` | Empties the library. |
 
@@ -255,6 +292,11 @@ The API is on `/api`, documented by the server itself with Swagger UI on [`/api/
 
 | Request | What it does |
 |---|---|
+| `GET /api/media/{id}/grade` | A quilt's grade, see [Grade a Quilt](#grade-a-quilt). |
+| `PUT /api/media/{id}/grade` | Grades a quilt, e.g. `{"exposure": 0.5, "saturation": 20}`. |
+| `DELETE /api/media/{id}/grade` | Removes its grade. |
+| `POST /api/media/{id}/graded-copies` | Saves the quilt with its grade, as a new quilt. |
+| `GET /api/grade-parameters` | What a grade is made of, with the ranges. |
 | `GET /api/display` | What the Looking Glass shows, whether it is on the screen, where or why not, and how a video plays. |
 | `PUT /api/display` | Shows a medium of the library, `{"media_id": ...}` or `{"media_name": ...}`, or the test pattern, `{"test_pattern": true}`. |
 | `DELETE /api/display` | Shows black; what was shown stays in the library. |

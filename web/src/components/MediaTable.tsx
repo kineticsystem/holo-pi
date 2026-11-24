@@ -1,4 +1,4 @@
-// The library's media, one row each, with what they are, buttons to download and remove them, and a box to tick
+// The library's media, one row each, with what they are, buttons to rename, download and remove them, and a box to tick
 // each, to remove several in one go. A click on a row shows its medium, and the arrow keys show the one above or below.
 // A row moves by its grip, dragged above or below another, or with Alt and the arrow keys for the current row.
 import { useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react';
@@ -6,6 +6,7 @@ import type { Medium } from '../services/HoloPiApi';
 import { formatBytes, formatDuration, formatLayout, formatTime } from '../utils/formatUtils';
 import { moveNextTo, sameOrder, stepThrough } from '../utils/listUtils';
 import { ConfirmButton } from './ConfirmButton';
+import { RenameForm } from './RenameForm';
 
 type MediaTableProps = {
   media: Medium[];
@@ -18,6 +19,8 @@ type MediaTableProps = {
   onShow: (id: string) => void;
   /** The media's ids in the order wanted, after a row moved. */
   onMove: (ids: string[]) => void;
+  /** Whether the new name was taken. */
+  onRename: (id: string, name: string) => Promise<boolean>;
   onRemove: (id: string) => void;
   onSelect: (id: string, on: boolean) => void;
   onSelectAll: (on: boolean) => void;
@@ -27,10 +30,11 @@ const STEPS: Record<string, 1 | -1> = { ArrowDown: 1, ArrowUp: -1 };
 
 type Drop = { id: string; after: boolean };
 
-export function MediaTable({ media, shownId, currentId, selected, disabled, contentUrl, onShow, onMove, onRemove,
+export function MediaTable({ media, shownId, currentId, selected, disabled, contentUrl, onShow, onMove, onRename, onRemove,
                             onSelect, onSelectAll }: MediaTableProps) {
   const [dragged, setDragged] = useState<string | null>(null);  // The row being dragged.
   const [drop, setDrop] = useState<Drop | null>(null);  // Where it would land: next to this row.
+  const [renaming, setRenaming] = useState<string | null>(null);  // The row whose name is being changed.
   if (media.length === 0) return <p className="empty">The library is empty: upload a quilt or a video.</p>;
   const ids = media.map(medium => medium.id);
   const allSelected = selected.length === media.length;
@@ -58,7 +62,7 @@ export function MediaTable({ media, shownId, currentId, selected, disabled, cont
 
   function handleRowClick(event: MouseEvent<HTMLTableRowElement>, id: string) {
     // The row's own controls, and its grip, do their own job.
-    if ((event.target as HTMLElement).closest('input, a, button, .grip')) return;
+    if ((event.target as HTMLElement).closest('input, a, button, .rename, .grip')) return;
     onShow(id);
   }
 
@@ -126,7 +130,10 @@ export function MediaTable({ media, shownId, currentId, selected, disabled, cont
                      disabled={disabled} onChange={event => onSelect(medium.id, event.target.checked)} />
             </td>
             <td>
-              <span className="name">{medium.name}</span>
+              {medium.id === renaming
+                ? <RenameForm name={medium.name} onRename={name => onRename(medium.id, name)}
+                              onDone={() => setRenaming(null)} />
+                : <span className="name">{medium.name}</span>}
               {medium.id === shownId && <span className="badge">on screen</span>}
               {medium.warning && <span className="badge warning" title={medium.warning}>not H.265</span>}
               <div className="id">{medium.id}</div>
@@ -138,6 +145,8 @@ export function MediaTable({ media, shownId, currentId, selected, disabled, cont
             <td>{formatTime(medium.uploaded)}</td>
             <td>
               <div className="actions">
+                <button disabled={disabled} aria-label={`Rename ${medium.name}`}
+                        onClick={() => setRenaming(medium.id)}>Rename</button>
                 <a className="button" href={contentUrl(medium.id)} download={medium.name}>Download</a>
                 <ConfirmButton label="Remove" confirmLabel="Remove it" disabled={disabled}
                                onConfirm={() => onRemove(medium.id)} />

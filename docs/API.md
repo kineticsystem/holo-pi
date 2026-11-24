@@ -10,7 +10,12 @@
   - [List the Media](#list-the-media)
   - [Order the Media](#order-the-media)
   - [Get, Download and Remove a Medium](#get-download-and-remove-a-medium)
+  - [Rename a Medium](#rename-a-medium)
   - [Remove Every Medium](#remove-every-medium)
+- [The Grades](#the-grades)
+  - [Grade a Quilt](#grade-a-quilt)
+  - [Save a Graded Quilt](#save-a-graded-quilt)
+  - [The Parameters](#the-parameters)
 - [The Display](#the-display)
   - [What Is Shown](#what-is-shown)
   - [Show a Medium or the Test Pattern](#show-a-medium-or-the-test-pattern)
@@ -48,7 +53,13 @@ Requests and answers are JSON, except the upload, a multipart form, and a medium
 | `DELETE` | `/api/media` | Removes every medium. | `204` |
 | `GET` | `/api/media/{id}` | What a medium is. | `200`, `404` |
 | `GET` | `/api/media/{id}/content` | Its file, as uploaded. | `200`, `404` |
+| `PUT` | `/api/media/{id}/name` | Renames it. | `200`, `400`, `404`, `409` |
 | `DELETE` | `/api/media/{id}` | Removes it. | `204`, `404` |
+| `GET` | `/api/media/{id}/grade` | A quilt's grade. | `200`, `404` |
+| `PUT` | `/api/media/{id}/grade` | Grades a quilt. | `200`, `400`, `404`, `501` |
+| `DELETE` | `/api/media/{id}/grade` | Removes its grade. | `204`, `400`, `404`, `501` |
+| `POST` | `/api/media/{id}/graded-copies` | Saves the quilt with its grade, as a new quilt. | `201`, `400`, `404`, `501`, `503` |
+| `GET` | `/api/grade-parameters` | What a grade is made of. | `200` |
 | `GET` | `/api/display` | What the Looking Glass shows. | `200` |
 | `PUT` | `/api/display` | Shows a medium, by its id or its name, or the test pattern. | `200`, `400`, `404`, `503` |
 | `DELETE` | `/api/display` | Shows black. | `204` |
@@ -182,6 +193,26 @@ curl -OJ http://holo.local:8095/api/media/8299c881/content
 
 `DELETE /api/media/{id}` removes it from the library, its file too, and answers `204`, with no body. If the Looking Glass shows it, it shows black. All three answer `404` for an id the library does not have.
 
+### Rename a Medium
+
+```
+PUT /api/media/{id}/name
+Content-Type: application/json
+```
+
+```json
+{"name": "my helix_qs8x6a0.75.mp4"}
+```
+
+Gives the medium another name, and answers the [medium](#the-medium). Its file, its id, its layout, its grade and its place in the library stay, and what the Looking Glass shows does not change. A layout in the new name is only text: the medium keeps the one it was uploaded with. The name keeps its file's extension: `my helix` becomes `my helix.mp4`.
+
+| Status | When | Body |
+|---|---|---|
+| `200` | The medium has this name. | The [medium](#the-medium). |
+| `400` | A name no file can have: empty, longer than 255 bytes, or with a slash, a backslash or a control character. | An [error](#errors). |
+| `404` | An id the library does not have. | An [error](#errors). |
+| `409` | Another medium has this name. | An [error](#errors). Nothing is replaced. |
+
 ### Remove Every Medium
 
 ```
@@ -189,6 +220,71 @@ DELETE /api/media
 ```
 
 Empties the library, its files too, and answers `204`. If the Looking Glass shows one of them, it shows black.
+
+## The Grades
+
+A grade is how a quilt's light and colours are changed when it is shown: exposure, contrast, saturation, sharpness, and so on, the tools of StepIt Grader. It is kept beside the quilt, in the library's index, and the quilt's file stays as uploaded. Only quilts can be graded, not videos, and only a screen drawn by the GPU, `--screen gl`, the container's, shows grades.
+
+### Grade a Quilt
+
+```
+GET /api/media/{id}/grade
+PUT /api/media/{id}/grade
+DELETE /api/media/{id}/grade
+```
+
+```bash
+curl -X PUT -H "Content-Type: application/json" -d '{"exposure": 0.5, "saturation": 20, "sharpness": 60}' http://holo.local:8095/api/media/8299c881/grade
+```
+
+`PUT` replaces the whole grade: a value not given is at its default. If the Looking Glass shows the quilt, it answers once the quilt is drawn with the grade, about 14 ms later on a Pi 5, or about 31 with a tool that looks around each pixel: a client can send one request after another to follow a slider. If the quilt cannot be shown yet, the grade is kept, and `GET /api/display` says why. It answers the grade, as `GET` does: every value, and `enabled`, which when `false` shows the quilt as uploaded and keeps the values.
+
+The server writes the grade to its disk a second after the last change, and it stays after a restart. An upload that replaces a medium of the same name has no grade. `DELETE` puts every value back to its default and answers `204`, with no body.
+
+| Status | When | Body |
+|---|---|---|
+| `200` | The quilt has this grade. | The grade. |
+| `400` | A video: only a quilt can be graded. | An [error](#errors). |
+| `404` | An id the library does not have. | An [error](#errors). |
+| `422` | A value out of its range, e.g. `{"exposure": 9}`. | An [error](#errors). |
+| `501` | The screen is not drawn by the GPU. | An [error](#errors). |
+
+### Save a Graded Quilt
+
+```
+POST /api/media/{id}/graded-copies
+```
+
+Keeps the quilt with its grade as a new quilt, the last of the library, and answers `201` with its `Location`, `/api/media/{id}` of the new one, and the [medium](#the-medium). The request has no body: it saves the grade the server has. The new quilt is a PNG, without loss, of the same size, layout and order of views, whose name gets `-graded` before its layout, e.g. `helix-graded_qs8x6a0.75.png`, then `helix-graded-2_qs8x6a0.75.png`: it never replaces another. It has no grade of its own, as it is in its pixels, and any Looking Glass can show it. The quilt, its grade and what the Looking Glass shows do not change.
+
+| Status | When | Body |
+|---|---|---|
+| `201` | The new quilt is in the library. | The [medium](#the-medium). |
+| `400` | A video, or a quilt that has no grade, or whose grade is switched off. | An [error](#errors). |
+| `404` | An id the library does not have. | An [error](#errors). |
+| `501` | The screen is not drawn by the GPU. | An [error](#errors). |
+| `503` | The Looking Glass is not ready: the GPU draws only with its screen. | An [error](#errors). |
+
+### The Parameters
+
+```
+GET /api/grade-parameters
+```
+
+Answers the values of a grade, `items`, section by section, in the order to show them; the web page draws its sliders from it:
+
+```json
+{"items": [{"id": "exposure", "label": "Exposure", "section": "Light", "description": "The light, in stops: 1 is twice as much.",
+            "minimum": -5, "maximum": 5, "default": 0, "decimals": 2}]}
+```
+
+| Section | Parameters |
+|---|---|
+| Color | `temperature`, `tint`, `vibrance`, `saturation` |
+| Light | `exposure`, in stops, `contrast`, `highlights`, `shadows`, `blacks` |
+| Tone Curve | `curve_shadows`, `curve_darks`, `curve_lights`, `curve_highlights`, and where these zones meet, `shadow_split`, `midtone_split`, `highlight_split` |
+| Color Mixer | `<band>_hue`, `<band>_saturation`, `<band>_luminance`, for the bands `red`, `orange`, `yellow`, `green`, `aqua`, `blue`, `purple` and `magenta` |
+| Effects | `structure`, `detail`, `sharpness` |
 
 ## The Display
 
@@ -317,10 +413,11 @@ Every error has the same body, with what went wrong and what to check:
 
 | Status | Meaning |
 |---|---|
-| `400` | The request cannot work, whatever the Looking Glass: not an image nor a video, no layout, a hologram video of another size, or nothing to show. |
+| `400` | The request cannot work, whatever the Looking Glass: not an image nor a video, no layout, a hologram video of another size, a name no file can have, a video to grade, no grade to save, or nothing to show. |
 | `404` | No medium of this id or name. |
-| `422` | A field is missing or of the wrong type: `{"error": "invalid request: body.columns: ..."}`. |
-| `501` | A video, and the server has no PyAV. |
+| `409` | Another medium has the new name. |
+| `422` | A field is missing, of the wrong type or out of its range: `{"error": "invalid request: body.columns: ..."}`. |
+| `501` | A video, and the server has no PyAV; or a grade, and the screen is not drawn by the GPU. |
 | `503` | The Looking Glass is not ready: no calibration, no screen of its size, or the screen is held by a desktop. See [Troubleshooting](../README.md#troubleshooting). |
 
 ## Clients

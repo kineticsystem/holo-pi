@@ -13,6 +13,9 @@ what it is:
 A name is unique: an upload of a name the library has replaces that item, and
 keeps its id and its place, so that what refers to it still does.
 
+A quilt may have a grade, see grade.py: kept in its entry, its file stays as
+uploaded. A replacement starts without one.
+
 The items are in an order of their own, that of index.json: a new one goes last,
 and reorder() puts them in another.
 """
@@ -39,6 +42,15 @@ log = logging.getLogger(__name__)
 
 QUILT, QUILT_VIDEO, HOLOGRAM_VIDEO = "quilt", "quilt video", "hologram video"
 INDEX = "index.json"
+# The longest name, in bytes: what the file systems a download goes to take.
+LONGEST_NAME = 255
+# How long after the last change of a grade the index is written: a slider changes it many times a second, and the
+# disk of a Raspberry Pi is often an SD card.
+SAVE_S = 1
+
+
+class NameTaken(ValueError):
+    """Another item of the library has the name."""
 
 
 class QuiltError(ValueError):
@@ -62,6 +74,7 @@ class Item:
     frames: Optional[int] = None
     duration: Optional[float] = None  # In seconds.
     codec: Optional[str] = None  # A video's, e.g. hevc.
+    grade: Optional[dict] = None  # A quilt's grade, as Grade.kept gives it; None for a quilt shown as it is.
 
     @property
     def layout(self):
@@ -83,6 +96,7 @@ class Library:
         self.folder = Path(folder)
         self.lock = threading.RLock()
         self.items = {}  # By id, in the library's order.
+        self.timer = None  # Writes the index a while after a grade changed.
         self._load()
 
     def _load(self):
@@ -101,6 +115,9 @@ class Library:
             log.warning("Cannot read the library's index %s: %s", path, error)
 
     def _save(self):
+        if self.timer is not None:
+            self.timer.cancel()
+            self.timer = None
         self.folder.mkdir(parents=True, exist_ok=True)
         data = json.dumps([asdict(item) for item in self.items.values()], indent=2).encode()
         temporary = self.folder / (INDEX + ".tmp")
@@ -165,6 +182,16 @@ class Library:
         log.info("Kept %s, %s, as %s", name, item.kind, id)
         return item
 
+    def add_copy(self, source, item, suffix, extension):
+        """Keeps the picture in `source`, a binary file, as a new item beside `item`, a quilt of its layout, with
+        `suffix` in its name, and a number if the library has that name already. Returns the new item."""
+        with self.lock:
+            number, name = 1, Layout.rename(item.name, suffix, extension)
+            while self.find(name=name) is not None:
+                number += 1
+                name = Layout.rename(item.name, f"{suffix}-{number}", extension)
+            return self.add(source, name, item.columns, item.rows, item.reverse)
+
     def _inspect(self, path, name, layout, screen):
         """What the upload at `path` is: the fields of its Item but its id, name, file, size and time."""
         try:
@@ -206,6 +233,53 @@ class Library:
             if self.items.pop(item.id, None) is not None:
                 self.path(item).unlink(missing_ok=True)
                 self._save()
+
+    def set_grade(self, item, grade):
+        """Keeps the grade of a quilt, a Grade: in memory at once, in the index SAVE_S after the last change."""
+        with self.lock:
+            item.grade = grade.kept
+            if self.timer is not None:
+                self.timer.cancel()
+            self.timer = threading.Timer(SAVE_S, self.flush)
+            self.timer.daemon = True
+            self.timer.start()
+
+    def flush(self):
+        """Writes the grades not written yet, if any."""
+        with self.lock:
+            if self.timer is None:
+                return
+            try:
+                self._save()
+            except OSError as error:
+                log.warning("Cannot keep the grades in %s: %s", self.folder, error)
+
+    def rename(self, item, name):
+        """Gives an item another name; its file, its id, its layout, its grade and its place stay. The name keeps the
+        file's extension, added if it is not there, as a download needs it. Raises ValueError for a name no file can
+        have, and NameTaken for one another item has."""
+        name = name.strip()
+        extension = re.search(r"\.[A-Za-z][A-Za-z0-9]{0,7}$", item.name)  # Not .75 of a name that ends in its layout.
+        if extension and name and not name.lower().endswith(extension.group().lower()):
+            name += extension.group()
+        stem = name[:-len(extension.group())] if extension else name
+        if not stem.strip(" ."):
+            raise ValueError("a name cannot be empty")
+        if not name.isprintable() or re.search(r'[/\\]', name):
+            raise ValueError("a name cannot have a slash, a backslash or a control character")
+        if len(name.encode()) > LONGEST_NAME:
+            raise ValueError(f"a name cannot be longer than {LONGEST_NAME} bytes")
+        with self.lock:
+            other = self.find(name=name)
+            if other is not None and other.id != item.id:
+                raise NameTaken(f"the library has another {name}")
+            before, item.name = item.name, name
+            try:
+                self._save()
+            except OSError:
+                item.name = before
+                raise
+        return item
 
     def reorder(self, ids):
         """Puts the items in the order of `ids`: each of the library's ids once. Raises KeyError, its message the

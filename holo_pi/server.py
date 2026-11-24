@@ -13,6 +13,7 @@ Player's, until a quilt or another video replaces it; it is kept as a quilt is.
 See docs/API.md for the API, and http://<host>:8095/docs for the same, live.
 """
 
+import io
 import json
 import logging
 import os
@@ -29,14 +30,16 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, create_model
+from PIL import Image
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
 from .calibration import find_calibration, load_calibration, mount_drives
+from .grade import PARAMETERS, Grade
 from .interleave import Interleaver
 from .layout import Layout
-from .library import HOLOGRAM_VIDEO, QUILT, QUILT_VIDEO, Library, QuiltError
+from .library import HOLOGRAM_VIDEO, QUILT, QUILT_VIDEO, Library, NameTaken, QuiltError
 from .numbers import numbers_quilt
 from .quilt import read_quilt
 from .screen import open_screen
@@ -103,6 +106,14 @@ class Video:
     rows: Optional[int] = None
     reverse: bool = False
     id: Optional[str] = None  # Its id in the library.
+
+
+class CannotGrade(ValueError):
+    """A medium that cannot be graded, a video, or a quilt that has no grade to save."""
+
+
+class NoGpu(RuntimeError):
+    """No quilt can be graded: the screen is not drawn by the GPU."""
 
 
 class Display:
@@ -236,6 +247,47 @@ class Display:
             for item in self.library.list():
                 self.library.remove(item)
 
+    # The grades.
+
+    def grade(self, item):
+        """The grade of a library's item, kept beside it."""
+        return Grade.of(item.grade)
+
+    def set_grade(self, item, grade):
+        """Keeps the grade of a library's quilt, and shows it with it at once, if it is shown. Raises CannotGrade for
+        a video, and NoGpu without a GPU."""
+        self._check_gradable(item)
+        with self.lock:
+            self.library.set_grade(item, grade)
+            if self.quilt is not None and self.quilt.id == item.id:
+                try:
+                    self._show()
+                except RuntimeError:
+                    pass  # Shown with it as soon as it can be: GET /api/display says why not yet.
+
+    def save_graded(self, item):
+        """Keeps a library's quilt with its grade, as a new quilt, without showing it; the quilt and its grade stay.
+        Returns the new item. Raises CannotGrade for a video or a quilt without a grade, NoGpu without a GPU, and
+        RuntimeError if the Looking Glass is not ready."""
+        self._check_gradable(item)
+        grade = self.grade(item)
+        if not grade.changes:
+            raise CannotGrade(f"{item.name} has no grade to save, or it is switched off")
+        picture = read_quilt(self.library.path(item), item.name)
+        graded = self.screen.grade_quilt(picture, item.layout, self.calibration(), grade)
+        file = io.BytesIO()
+        # Without loss, and compressed little: a Raspberry Pi would take several times longer for a file not much
+        # smaller.
+        Image.fromarray(graded).save(file, "PNG", compress_level=1)
+        file.seek(0)
+        return self.library.add_copy(file, item, "-graded", ".png")
+
+    def _check_gradable(self, item):
+        if item.is_video:
+            raise CannotGrade(f"{item.name} is a {item.kind}: only a quilt can be graded")
+        if not getattr(self.screen, "grades", False):
+            raise NoGpu("grading needs a screen drawn by the GPU: start the server with --screen gl")
+
     # What is shown.
 
     def show_test_pattern(self, reverse=False):
@@ -266,17 +318,20 @@ class Display:
             calibration = self.calibration()
             layout = Layout(quilt.columns, quilt.rows)
             if hasattr(self.screen, "show_quilt"):  # The GPU interleaves it.
-                self.shown_on = self.screen.show_quilt(self.picture, layout, calibration, quilt.reverse)
+                item = self.library.find(id=quilt.id) if quilt.id else None
+                graded = {"grade": self.grade(item)} if item is not None and item.grade else {}
+                shown_on = self.screen.show_quilt(self.picture, layout, calibration, quilt.reverse, **graded)
             else:
                 hologram = self._interleaver(calibration, layout, quilt.width, quilt.height, quilt.reverse)
-                self.shown_on = self.screen.show(hologram(self.picture))
-            self.error = None
-            log.info("Showing %s on %s", quilt.name, self.shown_on)
+                shown_on = self.screen.show(hologram(self.picture))
+            if self.shown_on is None:  # Not again at each step of a slider that grades it.
+                log.info("Showing %s on %s", quilt.name, shown_on)
+            self.shown_on, self.error = shown_on, None
             return self.shown_on
         except RuntimeError as error:
             if str(error) != self.error:
                 log.warning("Cannot show %s yet: %s", quilt.name, error)
-            self.error = str(error)
+            self.shown_on, self.error = None, str(error)
             raise
 
     # The video.
@@ -348,6 +403,7 @@ class Display:
         self.stopping.set()
         with self.lock:
             self._stop_player()
+        self.library.flush()
 
     # What was shown last, to show it again after a restart: shown.json, with the library's id, or the test quilt.
 
@@ -475,7 +531,8 @@ class Display:
                 item = self.library.find(id=video.id)
                 shown_on = player.shown_on if player else None
                 rate = player.frame_rate() if player else None
-                return dict(nothing, source=MEDIA, media=item and self.item_status(item), name=video.name,
+                return dict(nothing, source=MEDIA, media=item and self.item_status(item),
+                            name=item.name if item else video.name,
                             kind=QUILT_VIDEO if video.columns else HOLOGRAM_VIDEO, reverse=video.reverse,
                             shown=shown_on is not None, shown_on=shown_on,
                             error=(player.error if player else self.video_error) if shown_on is None else None,
@@ -485,7 +542,8 @@ class Display:
                 quilt = self.quilt
                 item = self.library.find(id=quilt.id) if quilt.id else None
                 source = MEDIA if quilt.id else TEST_PATTERN if quilt.name == NUMBERS else DEFAULT
-                return dict(nothing, source=source, media=item and self.item_status(item), name=quilt.name,
+                return dict(nothing, source=source, media=item and self.item_status(item),
+                            name=item.name if item else quilt.name,
                             kind=QUILT, reverse=quilt.reverse, shown=self.shown_on is not None,
                             shown_on=self.shown_on, error=self.error)
             return nothing
@@ -541,6 +599,8 @@ server on a network you trust. **Try it out** changes what the Looking Glass sho
 TAGS = [
     {"name": "media", "description": "The library: the quilts and videos kept on the server's disk. Upload, list, "
                                      "download and remove them."},
+    {"name": "grades", "description": "How a quilt's light and colours are changed when it is shown: "
+                                      "kept beside the quilt, whose file stays as uploaded."},
     {"name": "display", "description": "What the Looking Glass shows: a medium of the library, the test pattern, "
                                        "or black."},
     {"name": "server", "description": "The server, the screen and the Looking Glass's calibration."},
@@ -589,6 +649,11 @@ class MediaListModel(BaseModel):
 class OrderRequest(BaseModel):
     ids: list[str] = Field(description="Every id of the library, once, in the order wanted.",
                            examples=[["8299c881", "3f9a1c2e"]])
+
+
+class NameRequest(BaseModel):
+    name: str = Field(description="The new name. The file's extension is added if it is not there.",
+                      examples=["my helix_qs8x6a0.75.mp4"])
 
 
 class DisplayModel(BaseModel):
@@ -642,6 +707,31 @@ class CalibrationModel(BaseModel):
     center: float = Field(description="Where view 0 starts under a lens, as a fraction of a lens.")
     subp: float = Field(description="The width of a sub-pixel, as a fraction of the screen's width.")
     inverted: bool = Field(description="Whether the views go from right to left under each lens.")
+
+
+GradeModel = create_model(
+    "GradeModel",
+    enabled=(bool, Field(True, description="Whether the quilt is shown with it: false shows it as uploaded, and keeps "
+                                           "the values.", examples=[True])),
+    **{parameter.id: (float, Field(parameter.default, ge=parameter.minimum, le=parameter.maximum,
+                                   description=parameter.description, examples=[parameter.default]))
+       for parameter in PARAMETERS})
+
+
+class GradeParameterModel(BaseModel):
+    id: str = Field(description="Its name in a grade.", examples=["exposure"])
+    label: str = Field(description="What to call it.", examples=["Exposure"])
+    section: str = Field(description="The section of the tools it belongs to.", examples=["Light"])
+    description: str = Field(description="What it does.", examples=["The light, in stops: 1 is twice as much."])
+    minimum: float = Field(description="Its least value.", examples=[-5])
+    maximum: float = Field(description="Its greatest value.", examples=[5])
+    default: float = Field(description="The value that changes nothing.", examples=[0])
+    decimals: int = Field(description="The decimals it is set and shown with.", examples=[2])
+
+
+class GradeParameterListModel(BaseModel):
+    items: list[GradeParameterModel] = Field(description="The parameters, section by section, in the order to show "
+                                                         "them.")
 
 
 class ErrorModel(BaseModel):
@@ -775,11 +865,85 @@ def create_app(display, web=None):
         item = find(id)
         return FileResponse(display.library.path(item), filename=item.name)
 
+    @app.put("/api/media/{id}/name", tags=["media"], response_model=MediaModel, summary="Rename a medium",
+             responses={**error(400, "A name no file can have: empty, too long, or with a slash."), **NOT_FOUND,
+                        **error(409, "Another medium has this name.")})
+    def put_name(request: NameRequest, id: str = FastApiPath(description="The medium's id.", examples=["3f9a1c2e"])):
+        """Gives the library's medium of this id another name. Its file, its id, its layout, its grade and its place
+        stay, and what the Looking Glass shows does not change. A layout in the new name, e.g. _qs8x6a0.75, is only
+        text: the medium keeps the layout it was uploaded with."""
+        try:
+            return display.item_status(display.library.rename(find(id), request.name))
+        except NameTaken as problem:
+            raise HTTPException(409, str(problem)) from problem
+        except ValueError as problem:
+            raise HTTPException(400, str(problem)) from problem
+
     @app.delete("/api/media/{id}", tags=["media"], status_code=204, summary="Remove a medium", responses=NOT_FOUND)
     def remove_medium(id: str = FastApiPath(description="The medium's id.", examples=["3f9a1c2e"])):
         """Removes the library's medium of this id, its file too. If the Looking Glass shows it, it shows black."""
         display.remove(find(id))
         return Response(status_code=204)
+
+    # The grades.
+
+    @app.get("/api/grade-parameters", tags=["grades"], response_model=GradeParameterListModel,
+             summary="List the parameters of a grade")
+    def list_grade_parameters():
+        """What a grade is made of: the tools, their sections and their ranges. The web page draws its sliders from
+        it."""
+        return {"items": [asdict(parameter) for parameter in PARAMETERS]}
+
+    @app.get("/api/media/{id}/grade", tags=["grades"], response_model=GradeModel, summary="Get a quilt's grade",
+             responses=NOT_FOUND)
+    def get_grade(id: str = FastApiPath(description="The medium's id.", examples=["3f9a1c2e"])):
+        """The grade of the library's medium of this id: every value at its default if it has none."""
+        return display.grade(find(id)).full
+
+    @app.put("/api/media/{id}/grade", tags=["grades"], response_model=GradeModel, summary="Grade a quilt",
+             responses={**error(400, "A video: only a quilt can be graded."), **NOT_FOUND,
+                        **error(501, "The screen is not drawn by the GPU, --screen gl.")})
+    def put_grade(grade: GradeModel, id: str = FastApiPath(description="The medium's id.", examples=["3f9a1c2e"])):
+        """Replaces the grade of the library's quilt of this id; a value not given is at its default. If the Looking
+        Glass shows the quilt, it answers once the quilt is drawn with the grade, soon enough to follow a slider. The
+        grade is kept, also after a restart, and the quilt's file stays as uploaded."""
+        item = find(id)
+        try:
+            display.set_grade(item, Grade.of(grade.model_dump()))
+        except CannotGrade as problem:
+            raise HTTPException(400, str(problem)) from problem
+        except NoGpu as problem:
+            raise HTTPException(501, str(problem)) from problem
+        return display.grade(item).full
+
+    @app.delete("/api/media/{id}/grade", tags=["grades"], status_code=204, summary="Remove a quilt's grade",
+                responses={**error(400, "A video: only a quilt can be graded."), **NOT_FOUND,
+                           **error(501, "The screen is not drawn by the GPU, --screen gl.")})
+    def remove_grade(id: str = FastApiPath(description="The medium's id.", examples=["3f9a1c2e"])):
+        """Shows the library's quilt of this id as uploaded again."""
+        put_grade(GradeModel(), id)
+        return Response(status_code=204)
+
+    @app.post("/api/media/{id}/graded-copies", tags=["grades"], response_model=MediaModel, status_code=201,
+              summary="Save a graded quilt as a new one",
+              responses={**error(400, "A video, or a quilt that has no grade, or whose grade is switched off."),
+                         **NOT_FOUND, **error(501, "The screen is not drawn by the GPU, --screen gl."),
+                         **error(503, "The Looking Glass is not ready: the GPU draws only with its screen.")})
+    def save_graded(response: Response,
+                    id: str = FastApiPath(description="The medium's id.", examples=["3f9a1c2e"])):
+        """Keeps the library's quilt of this id, with its grade, as a new quilt, a PNG of the same size and layout,
+        named e.g. helix-graded_qs8x6a0.75.png, the last of the library. It answers 201 with its Location. The quilt
+        and its grade stay as they are, and what the Looking Glass shows does not change. It takes a few seconds."""
+        try:
+            saved = display.save_graded(find(id))
+        except ValueError as problem:  # CannotGrade, or a quilt larger than the GPU takes.
+            raise HTTPException(400, str(problem)) from problem
+        except NoGpu as problem:
+            raise HTTPException(501, str(problem)) from problem
+        except RuntimeError as problem:
+            raise HTTPException(503, str(problem)) from problem
+        response.headers["Location"] = f"/api/media/{saved.id}"
+        return display.item_status(saved)
 
     # The display.
 
@@ -845,6 +1009,15 @@ def create_app(display, web=None):
     return app
 
 
+class _NoGrades(logging.Filter):
+    """Leaves the grades that went well out of the log of the requests: a slider sends many a second."""
+
+    def filter(self, record):
+        arguments = record.args if isinstance(record.args, tuple) else ()
+        return not (len(arguments) == 5 and arguments[1] == "PUT" and str(arguments[2]).endswith("/grade")
+                    and arguments[4] == 200)
+
+
 def web_folder():
     """The web page's built files: $HOLO_PI_WEB, e.g. in the container, or else web/dist of the checkout."""
     return Path(os.environ.get("HOLO_PI_WEB") or Path(__file__).resolve().parents[1] / "web" / "dist")
@@ -863,6 +1036,7 @@ def serve(host="0.0.0.0", port=8095, screen="auto", calibration=None, state=None
     if not (web / "index.html").exists():
         log.info("No web page in %s: build it with pnpm build in web/", web)
     server = uvicorn.Server(uvicorn.Config(create_app(display, web), host=host, port=port, log_level="info"))
+    logging.getLogger("uvicorn.access").addFilter(_NoGrades())  # After Config, which sets the loggers up.
     stop = threading.Event()
 
     def run_server():

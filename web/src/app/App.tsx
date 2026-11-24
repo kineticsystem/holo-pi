@@ -1,9 +1,11 @@
 // The composition root: the one place that names the real services, then the store and the page's panels.
 import { DisplayPanel } from '../features/DisplayPanel';
 import { ErrorBoundary } from '../features/ErrorBoundary';
+import { GradePage } from '../features/GradePage';
 import { Header } from '../features/Header';
 import { LibraryPanel } from '../features/LibraryPanel';
 import { useDisplayPolling } from '../hooks/useDisplayPolling';
+import { useRoute } from '../hooks/useRoute';
 import { UploadPanel } from '../features/UploadPanel';
 import { HoloPiStoreProvider } from '../model/HoloPiStoreContext';
 import { makeHttpHoloPiApi } from '../services/httpHoloPiApi';
@@ -18,12 +20,17 @@ function Background() {
 }
 
 export function App() {
+  const route = useRoute();
   return (
     <ServicesProvider value={services}>
       <HoloPiStoreProvider>
         <Background />
         <ErrorBoundary name="header"><Header /></ErrorBoundary>
-        <main>
+        {route.page === 'grade' && (
+          <ErrorBoundary key={route.id} name="grading page"><GradePage id={route.id} /></ErrorBoundary>
+        )}
+        {/* Hidden while grading, not gone, so that the uploads go on. */}
+        <main hidden={route.page !== 'library'}>
           <div className="side">
             <ErrorBoundary name="display panel"><DisplayPanel /></ErrorBoundary>
             <ErrorBoundary name="upload panel"><UploadPanel /></ErrorBoundary>

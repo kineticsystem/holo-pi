@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { medium } from '../test/FakeHoloPiApi';
-import { holoPiReducer, initialState, selectShownId } from './holoPiStore';
+import { holoPiReducer, initialState, selectGradable, selectShownId } from './holoPiStore';
 
 const listed = holoPiReducer(initialState, {
   type: 'mediaListed', list: { items: [medium({ id: 'a', size: 100 }), medium({ id: 'b', size: 50 })], size: 150, free: 1000 },
@@ -26,6 +26,12 @@ describe('the store', () => {
     expect([state.size, state.free]).toEqual([three.size, three.free]);
   });
 
+  test('a medium renamed keeps its place and its space', () => {
+    const state = holoPiReducer(listed, { type: 'mediumRenamed', medium: medium({ id: 'a', size: 100, name: 'new.mp4' }) });
+    expect(state.media?.map(m => [m.id, m.name])).toEqual([['a', 'new.mp4'], ['b', 'helix_qs8x6a0.75.mp4']]);
+    expect([state.size, state.free]).toEqual([150, 1000]);
+  });
+
   test('a removal gives its space back', () => {
     const state = holoPiReducer(listed, { type: 'mediumRemoved', id: 'a' });
     expect(state.media?.map(m => m.id)).toEqual(['b']);
@@ -44,6 +50,18 @@ describe('the store', () => {
     expect(selectShownId(state)).toBe('b');
     const pattern = holoPiReducer(state, { type: 'displayRead', display: { ...initialDisplay(), source: 'test pattern' } });
     expect(selectShownId(pattern)).toBeNull();
+  });
+
+  test('the quilt shown can be graded, through the GPU, and nothing else', () => {
+    function shows(kind: 'quilt' | 'quilt video') {
+      const display = { ...initialDisplay(), source: 'media', media: medium({ id: 'b', kind }) } as const;
+      return holoPiReducer(listed, { type: 'displayRead', display });
+    }
+    expect(selectGradable(shows('quilt'))).toEqual({ id: 'b', why: null });
+    expect(selectGradable(shows('quilt video')).id).toBeNull();
+    expect(selectGradable(listed).id).toBeNull();
+    const drm = { version: '0.1.0', screen: 'drm', looking_glass: null, calibration_error: null, display: shows('quilt').display! };
+    expect(selectGradable(holoPiReducer(listed, { type: 'statusRead', status: drm })).why).toContain('GPU');
   });
 });
 

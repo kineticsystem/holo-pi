@@ -42,6 +42,22 @@ export type Display = {
   warning: string | null;
 };
 
+/** How a quilt's light and colours are changed when it is shown: the values by their parameters' ids, those left out
+ * at their defaults. Not enabled, the quilt is shown as uploaded, and the values are kept. */
+export type Grade = { enabled: boolean; values: Record<string, number> };
+
+/** One value of a grade: a slider of the grading page. */
+export type GradeParameter = {
+  id: string;
+  label: string;
+  section: string;
+  description: string;
+  minimum: number;
+  maximum: number;
+  default: number;
+  decimals: number;
+};
+
 export type ServerStatus = {
   version: string;
   screen: string;
@@ -70,12 +86,21 @@ export interface HoloPiApi {
          signal?: AbortSignal): Promise<Result<Medium>>;
   /** Puts the library in the order of `ids`, each of its ids once; answers the list as it is now. */
   orderMedia(ids: string[]): Promise<Result<MediaList>>;
+  /** Gives a medium another name; answers it as it is now, its extension added if the name lacks it. */
+  renameMedium(id: string, name: string): Promise<Result<Medium>>;
   removeMedium(id: string): Promise<Result<void>>;
   removeAllMedia(): Promise<Result<void>>;
   getDisplay(signal?: AbortSignal): Promise<Result<Display>>;
   showMedium(id: string): Promise<Result<Display>>;
   showTestPattern(): Promise<Result<Display>>;
   showBlack(): Promise<Result<void>>;
+  /** The tools of a grade, section by section, in the order to show them. */
+  listGradeParameters(signal?: AbortSignal): Promise<Result<GradeParameter[]>>;
+  getGrade(id: string, signal?: AbortSignal): Promise<Result<Grade>>;
+  /** Replaces a quilt's grade; if the Looking Glass shows the quilt, it answers once it is drawn with it. */
+  setGrade(id: string, grade: Grade): Promise<Result<void>>;
+  /** Keeps a quilt with its grade as a new quilt, which it answers; the quilt and what is shown stay. */
+  saveGraded(id: string): Promise<Result<Medium>>;
   getStatus(signal?: AbortSignal): Promise<Result<ServerStatus>>;
   /** Where a medium's file downloads from. */
   contentUrl(id: string): string;

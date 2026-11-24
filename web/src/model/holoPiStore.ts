@@ -13,6 +13,7 @@ export type HoloPiState = {
 export type HoloPiAction =
   | { type: 'mediaListed'; list: MediaList }
   | { type: 'mediumUploaded'; medium: Medium }
+  | { type: 'mediumRenamed'; medium: Medium }
   | { type: 'mediumRemoved'; id: string }
   | { type: 'mediaOrdered'; ids: string[] }
   | { type: 'allMediaRemoved' }
@@ -35,6 +36,8 @@ export function holoPiReducer(state: HoloPiState, action: HoloPiAction): HoloPiS
         : [...others, action.medium];
       return { ...state, media, size, free: Math.max(0, state.free - (size - state.size)) };
     }
+    case 'mediumRenamed':
+      return { ...state, media: (state.media ?? []).map(m => (m.id === action.medium.id ? action.medium : m)) };
     case 'mediumRemoved': {
       const removed = (state.media ?? []).find(medium => medium.id === action.id);
       const media = (state.media ?? []).filter(medium => medium.id !== action.id);
@@ -54,6 +57,14 @@ export function holoPiReducer(state: HoloPiState, action: HoloPiAction): HoloPiS
     case 'statusRead':
       return { ...state, status: action.status, display: action.status.display };
   }
+}
+
+/** The quilt that can be graded, the one the Looking Glass shows, and why none can, if so. */
+export function selectGradable(state: HoloPiState): { id: string; why: null } | { id: null; why: string } {
+  if (state.status && state.status.screen !== 'gl') return { id: null, why: 'Grading needs the GPU: --screen gl' };
+  const medium = state.display?.source === 'media' ? state.display.media : null;
+  if (medium?.kind !== 'quilt') return { id: null, why: 'Show a quilt of the library to grade it' };
+  return { id: medium.id, why: null };
 }
 
 /** The id of the medium the Looking Glass shows, or null: from the display, so the list never needs a copy. */

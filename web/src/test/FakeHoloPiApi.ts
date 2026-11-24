@@ -1,5 +1,5 @@
 // A HoloPi API in memory, for the tests: a library, a display, and failures on request.
-import type { Display, HoloPiApi, MediaList, Medium, ServerStatus, UploadOptions } from '../services/HoloPiApi';
+import type { Display, Grade, GradeParameter, HoloPiApi, MediaList, Medium, ServerStatus, UploadOptions } from '../services/HoloPiApi';
 import { err, ok, type Result } from '../utils/result';
 
 export function medium(fields: Partial<Medium> = {}): Medium {
@@ -9,6 +9,16 @@ export function medium(fields: Partial<Medium> = {}): Medium {
     codec: 'hevc', warning: null, shown: false, ...fields,
   };
 }
+
+function parameter(id: string, section: string, minimum = -100, maximum = 100, decimals = 0): GradeParameter {
+  const label = id[0].toUpperCase() + id.slice(1);
+  return { id, label, section, description: `What the ${id} does.`, minimum, maximum, default: 0, decimals };
+}
+
+export const PARAMETERS = [
+  parameter('saturation', 'Color'), parameter('exposure', 'Light', -5, 5, 2), parameter('contrast', 'Light'),
+  parameter('sharpness', 'Effects', 0, 150),
+];
 
 const BLACK: Display = {
   source: null, media: null, name: null, kind: null, reverse: false, shown: false, shown_on: null, error: null,
@@ -90,6 +100,15 @@ export class FakeHoloPiApi implements HoloPiApi {
     return this.listMedia();
   }
 
+  renameMedium(id: string, name: string): Promise<Result<Medium>> {
+    if (this.failWith) return Promise.resolve(err(this.failWith));
+    if (this.media.some(m => m.name === name && m.id !== id)) return Promise.resolve(err(`the library has another ${name}`));
+    this.media = this.media.map(m => (m.id === id ? { ...m, name } : m));
+    const renamed = this.media.find(m => m.id === id)!;
+    if (this.display.media?.id === id) this.display = { ...this.display, media: renamed, name };
+    return Promise.resolve(ok(renamed));
+  }
+
   removeMedium(id: string): Promise<Result<void>> {
     if (this.refusing.has(id)) return Promise.resolve(err(`cannot remove ${id}`));
     this.media = this.media.filter(m => m.id !== id);
@@ -134,8 +153,61 @@ export class FakeHoloPiApi implements HoloPiApi {
     return this.answer(undefined);
   }
 
+  /** The grades kept, by their quilts' ids, and those asked for, in order. */
+  grades = new Map<string, Grade>();
+  gradesSet: Grade[] = [];
+  /** Grades wait for finishGrade(), to test what a slider sends while the screen draws. */
+  holdGrades = false;
+  private pendingGrades: (() => void)[] = [];
+  screen = 'gl';
+
+  listGradeParameters(): Promise<Result<GradeParameter[]>> {
+    return this.answer(PARAMETERS);
+  }
+
+  getGrade(id: string): Promise<Result<Grade>> {
+    return this.answer(this.grades.get(id) ?? { enabled: true, values: {} });
+  }
+
+  setGrade(id: string, grade: Grade): Promise<Result<void>> {
+    this.gradesSet.push(grade);
+    const set = () => {
+      this.grades.set(id, grade);
+      return this.answer(undefined);
+    };
+    if (!this.holdGrades) return set();
+    return new Promise(resolve => this.pendingGrades.push(() => void set().then(resolve)));
+  }
+
+  /** Lets the oldest grade waiting be drawn. */
+  finishGrade() {
+    this.pendingGrades.shift()?.();
+  }
+
+  /** The saves asked for: the quilt's id, and its grade at that moment. */
+  saves: { id: string; grade: Grade | undefined }[] = [];
+  /** Saves wait for finishSave(). */
+  holdSaves = false;
+  private pendingSaves: (() => void)[] = [];
+
+  saveGraded(id: string): Promise<Result<Medium>> {
+    this.saves.push({ id, grade: this.grades.get(id) });
+    const saved = medium({ id: `saved-${this.saves.length}`, name: 'helix-graded_qs8x6a0.75.png', kind: 'quilt' });
+    const save = () => {
+      if (!this.failWith) this.media.push(saved);
+      return this.answer(saved);
+    };
+    if (!this.holdSaves) return save();
+    return new Promise(resolve => this.pendingSaves.push(() => void save().then(resolve)));
+  }
+
+  /** Lets the oldest save waiting end. */
+  finishSave() {
+    this.pendingSaves.shift()?.();
+  }
+
   getStatus(): Promise<Result<ServerStatus>> {
-    return this.answer({ version: '0.1.0', screen: 'gl', looking_glass: { serial: 'LKG-PORT-00000', width: 1536, height: 2048 },
+    return this.answer({ version: '0.1.0', screen: this.screen, looking_glass: { serial: 'LKG-PORT-00000', width: 1536, height: 2048 },
                          calibration_error: null, display: this.display });
   }
 }

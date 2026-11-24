@@ -99,3 +99,26 @@ test('media asked for while the screen changes: only the last one follows, and t
   expect(result.current.display.wanted).toBeNull();
   expect(result.current.display.pending).toBe(false);
 });
+
+test('a medium renamed shows its new name, on the display too', async () => {
+  const api = new FakeHoloPiApi([medium({ id: 'a', name: 'old.mp4' }), medium({ id: 'b' })]);
+  const result = setUp(api);
+  await waitFor(() => expect(result.current.library.media).not.toBeNull());
+  await act(() => result.current.display.show('a'));
+  let renamed: boolean | undefined;
+  await act(async () => { renamed = await result.current.library.rename('a', 'new.mp4'); });
+  expect(renamed).toBe(true);
+  expect(result.current.library.media?.map(m => m.name)).toEqual(['new.mp4', 'helix_qs8x6a0.75.mp4']);
+  expect(result.current.display.display?.name).toBe('new.mp4');
+});
+
+test('a name the server refuses changes nothing and says why', async () => {
+  const api = new FakeHoloPiApi([medium({ id: 'a', name: 'old.mp4' }), medium({ id: 'b', name: 'taken.mp4' })]);
+  const result = setUp(api);
+  await waitFor(() => expect(result.current.library.media).not.toBeNull());
+  let renamed: boolean | undefined;
+  await act(async () => { renamed = await result.current.library.rename('a', 'taken.mp4'); });
+  expect(renamed).toBe(false);
+  expect(result.current.library.error).toBe('the library has another taken.mp4');
+  expect(result.current.library.media?.[0].name).toBe('old.mp4');
+});
