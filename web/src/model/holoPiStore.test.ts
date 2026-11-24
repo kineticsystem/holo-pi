@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { medium } from '../test/FakeHoloPiApi';
-import { holoPiReducer, initialState, selectGradable, selectShownId } from './holoPiStore';
+import { holoPiReducer, initialState, selectGradable, selectGradeSources, selectShownId } from './holoPiStore';
 
 const listed = holoPiReducer(initialState, {
   type: 'mediaListed', list: { items: [medium({ id: 'a', size: 100 }), medium({ id: 'b', size: 50 })], size: 150, free: 1000 },
@@ -41,6 +41,14 @@ describe('the store', () => {
     expect(holoPiReducer(state, { type: 'mediumGraded', id: 'b', grade: 'on' })).toBe(state);
     const other = holoPiReducer(state, { type: 'mediumGraded', id: 'a', grade: 'off' });
     expect([other.media?.[0].grade, other.display]).toEqual(['off', state.display]);
+  });
+
+  test('a grade can be copied from the other graded quilts, also one switched off', () => {
+    const items = [medium({ id: 'a', grade: 'on' }), medium({ id: 'b', grade: 'off' }), medium({ id: 'c' }),
+                   medium({ id: 'd', grade: 'on' })];
+    const state = holoPiReducer(initialState, { type: 'mediaListed', list: { items, size: 0, free: 0 } });
+    expect(selectGradeSources(state, 'a').map(m => m.id)).toEqual(['b', 'd']);
+    expect(selectGradeSources(initialState, 'a')).toEqual([]);
   });
 
   test('a removal gives its space back', () => {

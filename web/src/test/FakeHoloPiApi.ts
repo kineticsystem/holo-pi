@@ -166,7 +166,18 @@ export class FakeHoloPiApi implements HoloPiApi {
   }
 
   getGrade(id: string): Promise<Result<Grade>> {
-    return this.answer(this.grades.get(id) ?? { enabled: true, values: {} });
+    const read = () => this.answer(this.grades.get(id) ?? { enabled: true, values: {} });
+    if (!this.holdReads) return read();
+    return new Promise(resolve => this.pendingReads.push(() => void read().then(resolve)));
+  }
+
+  /** Reads of a grade wait for finishRead(), to test what changes meanwhile. */
+  holdReads = false;
+  private pendingReads: (() => void)[] = [];
+
+  /** Lets the oldest read of a grade waiting be answered. */
+  finishRead() {
+    this.pendingReads.shift()?.();
   }
 
   setGrade(id: string, grade: Grade): Promise<Result<void>> {

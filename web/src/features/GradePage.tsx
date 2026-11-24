@@ -1,6 +1,7 @@
 // The grading page of a quilt: its tools, each change of which the Looking Glass shows at once.
 import { ConfirmButton } from '../components/ConfirmButton';
 import { ErrorMessage } from '../components/ErrorMessage';
+import { GradeSourceSelect } from '../components/GradeSourceSelect';
 import { ToolSection } from '../components/ToolSection';
 import { useDisplay } from '../hooks/useDisplay';
 import { useGrade } from '../hooks/useGrade';
@@ -24,6 +25,9 @@ export function GradePage({ id }: { id: string }) {
           <button className="primary" disabled={!grade.canSave} onClick={() => void grade.save()}>
             {grade.saving ? 'Saving…' : 'Save as new quilt'}
           </button>
+          <GradeSourceSelect sources={grade.sources} copiedId={grade.copiedId} disabled={grade.sections === null}
+                             onCopy={source => void grade.copyFrom(source)} />
+          {grade.canUndoCopy && <button onClick={grade.undoCopy}>Undo copy</button>}
           <ConfirmButton label="Reset" confirmLabel="Reset every tool" disabled={!grade.changed} onConfirm={grade.reset} />
         </p>
         {!grade.onScreen && (
