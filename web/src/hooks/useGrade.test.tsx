@@ -72,6 +72,23 @@ test('a change the server refuses says why', async () => {
   expect(result.current.grade.error).toBeNull();
 });
 
+test('the library and the display say whether the quilt is graded', async () => {
+  const { api, result } = await setUp();
+  await act(() => result.current.display.show('a'));
+  const grades = () => [result.current.library.media?.[0].grade, result.current.display.display?.media?.grade];
+  expect(grades()).toEqual([null, null]);
+  await act(async () => result.current.grade.change('contrast', 20));
+  expect(grades()).toEqual(['on', 'on']);
+  await act(async () => result.current.grade.toggleOriginal());
+  expect(grades()).toEqual(['off', 'off']);
+  api.failWith = 'grading needs a screen drawn by the GPU';
+  await act(async () => result.current.grade.reset());
+  expect(grades()).toEqual(['off', 'off']); // The server still has it.
+  api.failWith = null;
+  await act(async () => result.current.grade.reset());
+  expect(grades()).toEqual([null, null]);
+});
+
 test('it says whether the Looking Glass shows the quilt', async () => {
   const { result } = await setUp();
   expect(result.current.grade.onScreen).toBe(false);

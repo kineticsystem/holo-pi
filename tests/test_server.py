@@ -503,6 +503,24 @@ class GradeTest(ApiTest):
         self.assertFalse(self.screen.grade.changes)
         self.assertEqual(self.client.get(self.path).json()["exposure"], 1)
 
+    def test_a_medium_says_whether_it_is_graded(self):
+        def grades():
+            return (self.client.get(f"/api/media/{self.id}").json()["grade"],
+                    self.client.get("/api/media").json()["items"][0]["grade"],
+                    self.client.get("/api/display").json()["media"]["grade"])
+
+        self.assertEqual(grades(), (None, None, None))
+        self.client.put(self.path, json={"exposure": 1})
+        self.assertEqual(grades(), ("on", "on", "on"))
+        self.assertIsNone(self.save().json()["grade"])  # The copy has it in its pixels.
+        self.client.put(self.path, json={"exposure": 1, "enabled": False})
+        self.assertEqual(grades(), ("off", "off", "off"))
+        self.client.put(self.path, json={"enabled": False})  # Nothing is left to switch off.
+        self.assertEqual(grades(), (None, None, None))
+        self.client.put(self.path, json={"exposure": 1})
+        self.client.delete(self.path)
+        self.assertEqual(grades(), (None, None, None))
+
     def test_removing_the_grade_shows_the_quilt_as_uploaded(self):
         self.client.put(self.path, json={"exposure": 1})
         self.assertEqual(self.client.delete(self.path).status_code, 204)

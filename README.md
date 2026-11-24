@@ -177,7 +177,8 @@ The Pi keeps it in its library, shows it, and answers with what it kept, `201 Cr
 ```json
 {"id": "b44ef8ba", "name": "helix_qs8x6a0.75.jpg", "kind": "quilt", "size": 2979997,
  "uploaded": "2026-11-17T13:20:01+00:00", "width": 3360, "height": 3360, "columns": 8, "rows": 6,
- "reverse": false, "fps": null, "frames": null, "duration": null, "codec": null, "warning": null, "shown": true}
+ "reverse": false, "fps": null, "frames": null, "duration": null, "codec": null, "warning": null, "grade": null,
+ "shown": true}
 ```
 
 Through the lenses, an orange sphere stands at the screen's depth, a red one in front of it and a green one behind, and they turn as you move your head sideways. The sample is a quilt to compare yours with: it looks right on a Portrait.
@@ -222,6 +223,8 @@ A double click on a slider puts its default back. The buttons at the top:
 - **Save as new quilt** adds the graded quilt to the library, as a file of its own, a PNG named e.g. `helix-graded_qs8x6a0.75.png`, to download and show on any Looking Glass. The original and its grade stay. It takes about a second on a Pi 5.
 - **Reset** puts every tool back to its default.
 - **← Library** goes back.
+
+A graded quilt has a **graded** badge in the library, or **grade off** while its original is shown, and the card of what the Looking Glass shows says the same. A quilt saved as a new one has no badge: its grade is in its pixels.
 
 There is nothing else to save: the server keeps the grade with the quilt as we work, also across a restart, and never changes the quilt's file, so **Download** gives the original. An upload of the same name replaces the quilt and drops its grade.
 

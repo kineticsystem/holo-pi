@@ -5,6 +5,9 @@ import type { Result } from '../utils/result';
 
 export type MediaKind = 'quilt' | 'quilt video' | 'hologram video';
 
+/** Of a graded quilt: its grade is on, or off, i.e. it is shown as uploaded and its values are kept. */
+export type GradeState = 'on' | 'off';
+
 /** A quilt or a video kept in the server's library. */
 export type Medium = {
   id: string;
@@ -22,6 +25,8 @@ export type Medium = {
   duration: number | null;
   codec: string | null;
   warning: string | null;
+  /** null when it is not graded. */
+  grade: GradeState | null;
   shown: boolean;
 };
 

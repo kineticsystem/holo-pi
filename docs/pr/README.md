@@ -16,6 +16,7 @@ Each pull request has a notes file here. It keeps what the pull request does not
 | [14-web-page-screenshot.md](14-web-page-screenshot.md) | [#14](https://github.com/kineticsystem/holo-pi/pull/14) README: the web page's screenshot as it is now |
 | [15-reorder-media.md](15-reorder-media.md) | [#15](https://github.com/kineticsystem/holo-pi/pull/15) Order the library by dragging a row |
 | [16-quilt-grading.md](16-quilt-grading.md) | [#16](https://github.com/kineticsystem/holo-pi/pull/16) Grade a quilt while the Looking Glass shows it, and rename a medium |
+| [graded-badge.md](graded-badge.md) | Mark the graded quilts |
 
 ## How to Write One
 

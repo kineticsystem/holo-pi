@@ -70,6 +70,16 @@ test('the medium shown and a video not in H.265 are marked', () => {
   expect(screen.getByText('not H.265').closest('tr')).toHaveTextContent('old.mp4');
 });
 
+test('a graded quilt is marked, also when its grade is off, and no other', () => {
+  const quilts = [medium({ id: 'a', name: 'on.png', grade: 'on' }), medium({ id: 'b', name: 'off.png', grade: 'off' }),
+                  medium({ id: 'c', name: 'plain.png' })];
+  render(<MediaTable media={quilts} shownId={null} currentId={null} selected={[]} disabled={false} contentUrl={() => ''}
+                     onShow={() => {}} onMove={() => {}} onRename={() => Promise.resolve(true)} onRemove={() => {}} onSelect={() => {}} onSelectAll={() => {}} />);
+  expect(screen.getByText('graded').closest('tr')).toHaveTextContent('on.png');
+  expect(screen.getByText('grade off').closest('tr')).toHaveTextContent('off.png');
+  expect(screen.getByText('plain.png').closest('tr')).not.toHaveTextContent('grade');
+});
+
 test('downloads come from the server', () => {
   setUp();
   expect(screen.getAllByRole('link', { name: 'Download' })[0]).toHaveAttribute('href', '/api/media/a/content');

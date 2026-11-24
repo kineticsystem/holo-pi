@@ -106,6 +106,12 @@ class Grade:
         return dict({parameter.id: self[parameter.id] for parameter in PARAMETERS}, enabled=self.enabled)
 
     @property
+    def state(self):
+        """What the API says of it on its quilt: "on", "off" when it is switched off and its values kept, or None when
+        every value is at its default."""
+        return ("on" if self.enabled else "off") if self.values else None
+
+    @property
     def changes(self):
         """Whether it changes the picture."""
         return self.enabled and any(id not in SPLITS for id in self.values)

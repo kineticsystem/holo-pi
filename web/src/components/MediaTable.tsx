@@ -135,6 +135,12 @@ export function MediaTable({ media, shownId, currentId, selected, disabled, cont
                               onDone={() => setRenaming(null)} />
                 : <span className="name">{medium.name}</span>}
               {medium.id === shownId && <span className="badge">on screen</span>}
+              {medium.grade === 'on' && (
+                <span className="badge graded" title="Shown with its grade; Download gives the original">graded</span>
+              )}
+              {medium.grade === 'off' && (
+                <span className="badge off" title="Shown without its grade, which is kept">grade off</span>
+              )}
               {medium.warning && <span className="badge warning" title={medium.warning}>not H.265</span>}
               <div className="id">{medium.id}</div>
             </td>

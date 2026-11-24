@@ -1,6 +1,6 @@
 // The page's one store: the library's media, what the Looking Glass shows, and the server's status, as the server
 // last said. Every panel reads it, and changes it through these actions only.
-import type { Display, MediaList, Medium, ServerStatus } from '../services/HoloPiApi';
+import type { Display, GradeState, MediaList, Medium, ServerStatus } from '../services/HoloPiApi';
 
 export type HoloPiState = {
   media: Medium[] | null; // null until the first list arrives
@@ -14,6 +14,7 @@ export type HoloPiAction =
   | { type: 'mediaListed'; list: MediaList }
   | { type: 'mediumUploaded'; medium: Medium }
   | { type: 'mediumRenamed'; medium: Medium }
+  | { type: 'mediumGraded'; id: string; grade: GradeState | null }
   | { type: 'mediumRemoved'; id: string }
   | { type: 'mediaOrdered'; ids: string[] }
   | { type: 'allMediaRemoved' }
@@ -38,6 +39,15 @@ export function holoPiReducer(state: HoloPiState, action: HoloPiAction): HoloPiS
     }
     case 'mediumRenamed':
       return { ...state, media: (state.media ?? []).map(m => (m.id === action.medium.id ? action.medium : m)) };
+    case 'mediumGraded': {
+      // Of a slider's many steps, only the first and the last change it: the others leave the state as it is.
+      const regrade = (m: Medium) => (m.id === action.id && m.grade !== action.grade ? { ...m, grade: action.grade } : m);
+      const media = state.media?.some(m => regrade(m) !== m) ? state.media.map(regrade) : state.media;
+      const shown = state.display?.media;
+      const display = state.display && shown && regrade(shown) !== shown
+        ? { ...state.display, media: regrade(shown) } : state.display;
+      return media === state.media && display === state.display ? state : { ...state, media, display };
+    }
     case 'mediumRemoved': {
       const removed = (state.media ?? []).find(medium => medium.id === action.id);
       const media = (state.media ?? []).filter(medium => medium.id !== action.id);

@@ -12,6 +12,12 @@ export function DisplayCard({ display }: { display: Display | null }) {
       <dd>{what}{display.reverse ? ', views in reverse' : ''}</dd>
       <dt>Kind</dt>
       <dd>{display.kind}</dd>
+      {display.media?.grade && (
+        <>
+          <dt>Grade</dt>
+          <dd>{display.media.grade === 'on' ? 'on' : 'off: shown without it'}</dd>
+        </>
+      )}
       <dt>On the screen</dt>
       <dd>{display.shown ? `yes, on ${display.shown_on}` : `not yet: ${display.error ?? 'starting'}`}</dd>
       {display.frame_rate !== null && (
