@@ -1,6 +1,6 @@
 # Copy a Grade from Another Quilt
 
-Branch `copy-grade`.
+Pull request [#18](https://github.com/kineticsystem/holo-pi/pull/18), branch `copy-grade`.
 
 ## Goal
 
