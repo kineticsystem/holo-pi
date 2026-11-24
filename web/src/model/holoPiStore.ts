@@ -56,6 +56,14 @@ export function holoPiReducer(state: HoloPiState, action: HoloPiAction): HoloPiS
   }
 }
 
+/** The quilt that can be graded, the one the Looking Glass shows, and why none can, if so. */
+export function selectGradable(state: HoloPiState): { id: string; why: null } | { id: null; why: string } {
+  if (state.status && state.status.screen !== 'gl') return { id: null, why: 'Grading needs the GPU: --screen gl' };
+  const medium = state.display?.source === 'media' ? state.display.media : null;
+  if (medium?.kind !== 'quilt') return { id: null, why: 'Show a quilt of the library to grade it' };
+  return { id: medium.id, why: null };
+}
+
 /** The id of the medium the Looking Glass shows, or null: from the display, so the list never needs a copy. */
 export function selectShownId(state: HoloPiState): string | null {
   return state.display?.source === 'media' ? (state.display.media?.id ?? null) : null;

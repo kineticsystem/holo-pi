@@ -59,8 +59,13 @@ class GpuScreen(FakeScreen):
         super().__init__()
         self.quilts, self.frames_shown = [], []
 
-    def show_quilt(self, picture, layout, calibration, reverse=False):
+    grades = True
+
+    def show_quilt(self, picture, layout, calibration, reverse=False, grade=None):
+        if not self.on:
+            raise RuntimeError("no screen of 1536 x 2048")
         self.quilts.append((picture.shape, (layout.columns, layout.rows), reverse))
+        self.grade = grade
         return "the fake GPU"
 
     def show_quilt_frame(self, frame, layout, calibration, reverse=False):
@@ -367,7 +372,8 @@ class ServerTest(ApiTest):
     def test_documents_every_route(self):
         spec = self.client.get("/api/openapi.json").json()
         self.assertEqual(set(spec["paths"]), {"/api/media", "/api/media/order", "/api/media/{id}", "/api/media/{id}/content",
-                                              "/api/display", "/api/status", "/api/calibration"})
+                                              "/api/media/{id}/grade", "/api/grade-parameters", "/api/display",
+                                              "/api/status", "/api/calibration"})
         for methods in spec["paths"].values():
             for operation in methods.values():
                 self.assertTrue(operation.get("summary") and operation.get("description"), operation)
@@ -392,6 +398,118 @@ class ServerTest(ApiTest):
     def test_without_a_web_page_home_leads_to_the_documentation(self):
         response = self.client.get("/", follow_redirects=False)
         self.assertEqual((response.status_code, response.headers["location"]), (307, "/api/docs"))
+
+
+class GradeTest(ApiTest):
+    """The grades, on a fake screen with a GPU."""
+
+    def setUp(self):
+        super().setUp()
+        self.screen = GpuScreen()
+        self.display, self.client = self.server(self.screen)
+        self.id = self.upload(play=True).json()["id"]
+        self.path = f"/api/media/{self.id}/grade"
+
+    def test_lists_the_parameters(self):
+        items = self.client.get("/api/grade-parameters").json()["items"]
+        self.assertIn({"id": "exposure", "label": "Exposure", "section": "Light", "minimum": -5, "maximum": 5,
+                       "default": 0, "decimals": 2, "description": "The light, in stops: 1 is twice as much."}, items)
+        self.assertEqual(set(self.client.get(self.path).json()), {item["id"] for item in items} | {"enabled"})
+
+    def test_a_quilt_has_no_grade_at_first(self):
+        grade = self.client.get(self.path).json()
+        self.assertEqual((grade["enabled"], grade["exposure"], grade["midtone_split"]), (True, 0, 50))
+        self.assertIsNone(self.screen.grade)
+
+    def test_grades_the_quilt_shown_at_once(self):
+        response = self.client.put(self.path, json={"exposure": 1.5, "saturation": -20})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual((response.json()["exposure"], response.json()["contrast"]), (1.5, 0))
+        self.assertEqual(self.screen.grade.values, {"exposure": 1.5, "saturation": -20})
+        # A value not given is at its default again.
+        self.client.put(self.path, json={"contrast": 10})
+        self.assertEqual(self.screen.grade.values, {"contrast": 10})
+        self.assertEqual(self.client.get(self.path).json()["exposure"], 0)
+
+    def test_grades_a_quilt_not_shown_without_showing_it(self):
+        self.client.delete("/api/display")
+        shown = len(self.screen.quilts)
+        self.assertEqual(self.client.put(self.path, json={"exposure": 1}).status_code, 200)
+        self.assertEqual(len(self.screen.quilts), shown)
+        self.show(media_id=self.id)
+        self.assertEqual(self.screen.grade.values, {"exposure": 1})
+
+    def test_a_grade_switched_off_keeps_its_values(self):
+        self.client.put(self.path, json={"exposure": 1, "enabled": False})
+        self.assertFalse(self.screen.grade.changes)
+        self.assertEqual(self.client.get(self.path).json()["exposure"], 1)
+
+    def test_removing_the_grade_shows_the_quilt_as_uploaded(self):
+        self.client.put(self.path, json={"exposure": 1})
+        self.assertEqual(self.client.delete(self.path).status_code, 204)
+        self.assertIsNone(self.screen.grade)
+        self.assertEqual(self.client.get(self.path).json()["exposure"], 0)
+
+    def test_the_file_stays_as_uploaded(self):
+        self.client.put(self.path, json={"exposure": 1})
+        self.assertEqual(self.client.get(f"/api/media/{self.id}/content").content, self.quilt)
+
+    def test_the_grade_is_kept_after_a_restart(self):
+        self.client.put(self.path, json={"exposure": 1})
+        self.display.stop()  # Writes the grade, without waiting for the last change to be a while ago.
+        screen = GpuScreen()
+        display, client = self.server(screen)
+        display.restore()
+        display.retry()
+        self.assertEqual(screen.grade.values, {"exposure": 1})
+        self.assertEqual(client.get(self.path).json()["exposure"], 1)
+
+    def test_the_index_is_written_a_while_after_the_last_change(self):
+        index = self.state / "library" / "index.json"
+        with mock.patch("holo_pi.library.SAVE_S", 0.05):
+            self.client.put(self.path, json={"exposure": 1})
+            self.assertIsNone(json.loads(index.read_text())[0]["grade"])
+            wait_for(lambda: self.display.library.timer is None, "the index")
+        self.assertEqual(json.loads(index.read_text())[0]["grade"], {"exposure": 1, "enabled": True})
+
+    def test_another_upload_of_the_name_starts_without_a_grade(self):
+        self.client.put(self.path, json={"exposure": 1})
+        self.upload()
+        self.assertEqual(self.client.get(self.path).json()["exposure"], 0)
+
+    def test_refuses_a_value_out_of_its_range(self):
+        response = self.client.put(self.path, json={"exposure": 6})
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("exposure", response.json()["error"])
+
+    def test_an_unknown_id_is_not_found(self):
+        for method in ("get", "put", "delete"):
+            options = {"json": {}} if method == "put" else {}
+            self.assertEqual(getattr(self.client, method)("/api/media/00000000/grade", **options).status_code, 404)
+
+    def test_needs_the_gpu(self):
+        _, client = self.server(FakeScreen())
+        response = client.put(self.path, json={"exposure": 1})
+        self.assertEqual(response.status_code, 501)
+        self.assertIn("--screen gl", response.json()["error"])
+
+    def test_keeps_the_grade_of_a_quilt_it_cannot_show(self):
+        self.screen.on = False
+        self.assertEqual(self.client.put(self.path, json={"exposure": 1}).status_code, 200)
+        status = self.client.get("/api/display").json()
+        self.assertEqual((status["shown"], status["error"]), (False, "no screen of 1536 x 2048"))
+        self.screen.on = True
+        self.display.retry()
+        self.assertEqual(self.screen.grade.values, {"exposure": 1})
+        self.assertTrue(self.client.get("/api/display").json()["shown"])
+
+    @unittest.skipIf(hologram_video is None, "no PyAV")
+    def test_a_video_cannot_be_graded(self):
+        video = quilt_video(self.state / "test_qs8x6a0.75.mkv", numbered_quilt()).read_bytes()
+        id = self.upload("video_qs8x6a0.75.mkv", video).json()["id"]
+        response = self.client.put(f"/api/media/{id}/grade", json={"exposure": 1})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("only a quilt", response.json()["error"])
 
 
 @unittest.skipIf(hologram_video is None, "no PyAV")

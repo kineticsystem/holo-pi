@@ -13,6 +13,9 @@ what it is:
 A name is unique: an upload of a name the library has replaces that item, and
 keeps its id and its place, so that what refers to it still does.
 
+A quilt may have a grade, see grade.py: kept in its entry, its file stays as
+uploaded. A replacement starts without one.
+
 The items are in an order of their own, that of index.json: a new one goes last,
 and reorder() puts them in another.
 """
@@ -39,6 +42,9 @@ log = logging.getLogger(__name__)
 
 QUILT, QUILT_VIDEO, HOLOGRAM_VIDEO = "quilt", "quilt video", "hologram video"
 INDEX = "index.json"
+# How long after the last change of a grade the index is written: a slider changes it many times a second, and the
+# disk of a Raspberry Pi is often an SD card.
+SAVE_S = 1
 
 
 class QuiltError(ValueError):
@@ -62,6 +68,7 @@ class Item:
     frames: Optional[int] = None
     duration: Optional[float] = None  # In seconds.
     codec: Optional[str] = None  # A video's, e.g. hevc.
+    grade: Optional[dict] = None  # A quilt's grade, as Grade.kept gives it; None for a quilt shown as it is.
 
     @property
     def layout(self):
@@ -83,6 +90,7 @@ class Library:
         self.folder = Path(folder)
         self.lock = threading.RLock()
         self.items = {}  # By id, in the library's order.
+        self.timer = None  # Writes the index a while after a grade changed.
         self._load()
 
     def _load(self):
@@ -101,6 +109,9 @@ class Library:
             log.warning("Cannot read the library's index %s: %s", path, error)
 
     def _save(self):
+        if self.timer is not None:
+            self.timer.cancel()
+            self.timer = None
         self.folder.mkdir(parents=True, exist_ok=True)
         data = json.dumps([asdict(item) for item in self.items.values()], indent=2).encode()
         temporary = self.folder / (INDEX + ".tmp")
@@ -206,6 +217,26 @@ class Library:
             if self.items.pop(item.id, None) is not None:
                 self.path(item).unlink(missing_ok=True)
                 self._save()
+
+    def set_grade(self, item, grade):
+        """Keeps the grade of a quilt, a Grade: in memory at once, in the index SAVE_S after the last change."""
+        with self.lock:
+            item.grade = grade.kept
+            if self.timer is not None:
+                self.timer.cancel()
+            self.timer = threading.Timer(SAVE_S, self.flush)
+            self.timer.daemon = True
+            self.timer.start()
+
+    def flush(self):
+        """Writes the grades not written yet, if any."""
+        with self.lock:
+            if self.timer is None:
+                return
+            try:
+                self._save()
+            except OSError as error:
+                log.warning("Cannot keep the grades in %s: %s", self.folder, error)
 
     def reorder(self, ids):
         """Puts the items in the order of `ids`: each of the library's ids once. Raises KeyError, its message the

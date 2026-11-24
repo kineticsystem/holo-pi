@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { medium } from '../test/FakeHoloPiApi';
-import { holoPiReducer, initialState, selectShownId } from './holoPiStore';
+import { holoPiReducer, initialState, selectGradable, selectShownId } from './holoPiStore';
 
 const listed = holoPiReducer(initialState, {
   type: 'mediaListed', list: { items: [medium({ id: 'a', size: 100 }), medium({ id: 'b', size: 50 })], size: 150, free: 1000 },
@@ -44,6 +44,18 @@ describe('the store', () => {
     expect(selectShownId(state)).toBe('b');
     const pattern = holoPiReducer(state, { type: 'displayRead', display: { ...initialDisplay(), source: 'test pattern' } });
     expect(selectShownId(pattern)).toBeNull();
+  });
+
+  test('the quilt shown can be graded, through the GPU, and nothing else', () => {
+    function shows(kind: 'quilt' | 'quilt video') {
+      const display = { ...initialDisplay(), source: 'media', media: medium({ id: 'b', kind }) } as const;
+      return holoPiReducer(listed, { type: 'displayRead', display });
+    }
+    expect(selectGradable(shows('quilt'))).toEqual({ id: 'b', why: null });
+    expect(selectGradable(shows('quilt video')).id).toBeNull();
+    expect(selectGradable(listed).id).toBeNull();
+    const drm = { version: '0.1.0', screen: 'drm', looking_glass: null, calibration_error: null, display: shows('quilt').display! };
+    expect(selectGradable(holoPiReducer(listed, { type: 'statusRead', status: drm })).why).toContain('GPU');
   });
 });
 

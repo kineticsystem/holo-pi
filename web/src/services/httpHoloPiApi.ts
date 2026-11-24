@@ -1,7 +1,7 @@
 // The real client of HoloPi's API, over HTTP, on the server that serves the page: fetch for the requests, and
 // XMLHttpRequest for the uploads, as fetch cannot say how much of a request is sent.
 import { err, ok, type Result } from '../utils/result';
-import type { Display, HoloPiApi, MediaList, Medium, ServerStatus, UploadOptions } from './HoloPiApi';
+import type { Display, Grade, GradeParameter, HoloPiApi, MediaList, Medium, ServerStatus, UploadOptions } from './HoloPiApi';
 
 /** What an answer that is not ok says: the server's {"error": ...}, or else its status. */
 async function problem(response: Response): Promise<string> {
@@ -25,6 +25,18 @@ function json(method: string, body: unknown): RequestInit {
   return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
 }
 
+/** A grade as the server has it: its values and `enabled`, side by side. */
+type FlatGrade = Record<string, number | boolean>;
+
+function toGrade({ enabled, ...values }: FlatGrade): Grade {
+  return { enabled: enabled !== false, values: values as Record<string, number> };
+}
+
+async function map<T, U>(result: Promise<Result<T>>, change: (value: T) => U): Promise<Result<U>> {
+  const settled = await result;
+  return settled.ok ? ok(change(settled.value)) : settled;
+}
+
 export function makeHttpHoloPiApi(baseUrl = ''): HoloPiApi {
   const api = `${baseUrl}/api`;
   return {
@@ -38,6 +50,12 @@ export function makeHttpHoloPiApi(baseUrl = ''): HoloPiApi {
     showMedium: id => request<Display>(`${api}/display`, json('PUT', { media_id: id })),
     showTestPattern: () => request<Display>(`${api}/display`, json('PUT', { test_pattern: true })),
     showBlack: () => request<void>(`${api}/display`, { method: 'DELETE' }),
+    listGradeParameters: signal =>
+      map(request<{ items: GradeParameter[] }>(`${api}/grade-parameters`, { signal }), list => list.items),
+    getGrade: (id, signal) => map(request<FlatGrade>(`${api}/media/${encodeURIComponent(id)}/grade`, { signal }), toGrade),
+    setGrade: (id, grade) =>
+      map(request<FlatGrade>(`${api}/media/${encodeURIComponent(id)}/grade`,
+                             json('PUT', { ...grade.values, enabled: grade.enabled })), () => undefined),
     getStatus: signal => request<ServerStatus>(`${api}/status`, { signal }),
     upload: (file: File, options: UploadOptions, onProgress, signal) =>
       new Promise<Result<Medium>>(resolve => {

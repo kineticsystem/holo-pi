@@ -48,6 +48,9 @@ GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_TEXTURE_MAG_FILTER, GL_NEAREST, GL_TEXT
 GL_R8, GL_RED, GL_RGB, GL_RGB8, GL_RGBA, GL_RGBA8 = 0x8229, 0x1903, 0x1907, 0x8051, 0x1908, 0x8058
 GL_UNSIGNED_BYTE, GL_TRIANGLES, GL_COLOR_BUFFER_BIT, GL_MAX_TEXTURE_SIZE = 0x1401, 4, 0x4000, 0x0D33
 GL_UNPACK_ALIGNMENT, GL_PACK_ALIGNMENT, GL_UNPACK_ROW_LENGTH = 0x0CF5, 0x0D05, 0x0CF2
+GL_TEXTURE_3D, GL_LINEAR, GL_CLAMP_TO_EDGE = 0x806F, 0x2601, 0x812F
+GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_TEXTURE_WRAP_R = 0x2802, 0x2803, 0x8072
+GL_RGB10_A2, GL_R16F, GL_RGBA16F, GL_FRAMEBUFFER_BINDING = 0x8059, 0x822D, 0x881A, 0x8CA6
 GL_FRAMEBUFFER, GL_RENDERBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_COMPLETE = 0x8D40, 0x8D41, 0x8CE0, 0x8CD5
 
 # What a frame's YUV becomes: RGB = rows . (YUV - offset), by FFmpeg's colour spaces and ranges.
@@ -70,18 +73,12 @@ void main() {
 }
 """
 
-FRAGMENT = b"""#version 300 es
-precision highp float;
-precision highp int;
-uniform mediump sampler2D plane0, plane1, plane2;
-uniform int source;
+# The quilt's pixel of a sub-pixel of the screen: for the shaders that interleave, here and in gl_grade.py.
+TEXEL = b"""
 uniform vec2 screen;
 uniform float pitch, tilt, center, subp;
 uniform int inverted, reversed;
 uniform ivec2 grid, quiltSize;
-uniform vec3 toRgb[3];
-uniform vec3 yuvOffset;
-out vec4 colour;
 
 // The pixel of the quilt that sub-pixel i of the screen shows, as interleave.py's table() works it out; uv is the
 // screen's pixel from the bottom left, in fractions of the screen; the quilt's rows from the top.
@@ -97,7 +94,17 @@ ivec2 texel(int i, vec2 uv) {
     int row = quiltSize.y - 1 - clamp(int(y * float(quiltSize.y)), 0, quiltSize.y - 1);
     return ivec2(column, row);
 }
+"""
 
+FRAGMENT = b"""#version 300 es
+precision highp float;
+precision highp int;
+uniform mediump sampler2D plane0, plane1, plane2;
+uniform int source;
+uniform vec3 toRgb[3];
+uniform vec3 yuvOffset;
+out vec4 colour;
+""" + TEXEL + b"""
 float channel(int i, vec2 uv) {
     ivec2 at = texel(i, uv);
     if (source == 0) return texelFetch(plane0, at, 0)[i];
@@ -177,10 +184,13 @@ class _Libraries:
             ("glUniform2f", None, c_int, c_float, c_float), ("glUniform1i", None, c_int, c_int),
             ("glUniform2i", None, c_int, c_int, c_int), ("glUniform3f", None, c_int, c_float, c_float, c_float),
             ("glUniform3fv", None, c_int, c_int, POINTER(c_float)),
+            ("glUniform1fv", None, c_int, c_int, POINTER(c_float)),
+            ("glUniformMatrix3fv", None, c_int, c_int, ctypes.c_ubyte, POINTER(c_float)),
             ("glGenTextures", None, c_int, POINTER(c_uint)), ("glDeleteTextures", None, c_int, POINTER(c_uint)),
             ("glActiveTexture", None, c_uint), ("glBindTexture", None, c_uint, c_uint),
             ("glTexParameteri", None, c_uint, c_uint, c_int),
             ("glTexStorage2D", None, c_uint, c_int, c_uint, c_int, c_int),
+            ("glTexStorage3D", None, c_uint, c_int, c_uint, c_int, c_int, c_int),
             ("glTexSubImage2D", None, c_uint, c_int, c_int, c_int, c_int, c_int, c_uint, c_uint, c_void_p),
             ("glPixelStorei", None, c_uint, c_int), ("glViewport", None, c_int, c_int, c_int, c_int),
             ("glDrawArrays", None, c_uint, c_int, c_int), ("glFinish", None), ("glGetError", c_uint),
@@ -188,6 +198,9 @@ class _Libraries:
             ("glGetIntegerv", None, c_uint, POINTER(c_int)),
             ("glReadPixels", None, c_int, c_int, c_int, c_int, c_uint, c_uint, c_void_p),
             ("glGenFramebuffers", None, c_int, POINTER(c_uint)), ("glBindFramebuffer", None, c_uint, c_uint),
+            ("glDeleteFramebuffers", None, c_int, POINTER(c_uint)), ("glDeleteProgram", None, c_uint),
+            ("glFramebufferTexture2D", None, c_uint, c_uint, c_uint, c_uint, c_int),
+            ("glFramebufferTextureLayer", None, c_uint, c_uint, c_uint, c_int, c_int),
             ("glGenRenderbuffers", None, c_int, POINTER(c_uint)), ("glBindRenderbuffer", None, c_uint, c_uint),
             ("glRenderbufferStorage", None, c_uint, c_uint, c_int, c_int),
             ("glFramebufferRenderbuffer", None, c_uint, c_uint, c_uint, c_uint),
@@ -211,6 +224,33 @@ def libraries():
     return _libraries
 
 
+def link_program(gl, vertex, fragment):
+    """The program of two shaders' sources. Raises RuntimeError with the driver's log if it does not compile."""
+    def failed(object, status, get, get_log):
+        done = c_int()
+        get(object, status, byref(done))
+        if done.value:
+            return None
+        log = ctypes.create_string_buffer(4096)
+        get_log(object, 4096, None, log)
+        return log.value.decode()
+
+    program = gl.glCreateProgram()
+    for kind, source in [(GL_VERTEX_SHADER, vertex), (GL_FRAGMENT_SHADER, fragment)]:
+        shader = gl.glCreateShader(kind)
+        gl.glShaderSource(shader, 1, (c_char_p * 1)(source), None)
+        gl.glCompileShader(shader)
+        problem = failed(shader, GL_COMPILE_STATUS, gl.glGetShaderiv, gl.glGetShaderInfoLog)
+        if problem is not None:
+            raise RuntimeError(f"cannot compile the shader: {problem}")
+        gl.glAttachShader(program, shader)
+    gl.glLinkProgram(program)
+    problem = failed(program, GL_LINK_STATUS, gl.glGetProgramiv, gl.glGetProgramInfoLog)
+    if problem is not None:
+        raise RuntimeError(f"cannot link the shader: {problem}")
+    return program
+
+
 class Renderer:
     """Draws holograms into the bound framebuffer, of the screen's size, with the current OpenGL ES 3 context:
     from a quilt, RGB or a video's YUV 4:2:0 frame, interleaved by the shader, or from a hologram already, copied.
@@ -221,16 +261,7 @@ class Renderer:
     def __init__(self, width, height):
         self.gl = gl = libraries().gl
         self.width, self.height = width, height
-        self.program = gl.glCreateProgram()
-        gl.glAttachShader(self.program, self._shader(GL_VERTEX_SHADER, VERTEX))
-        gl.glAttachShader(self.program, self._shader(GL_FRAGMENT_SHADER, FRAGMENT))
-        gl.glLinkProgram(self.program)
-        linked = c_int()
-        gl.glGetProgramiv(self.program, GL_LINK_STATUS, byref(linked))
-        if not linked.value:
-            log = ctypes.create_string_buffer(4096)
-            gl.glGetProgramInfoLog(self.program, 4096, None, log)
-            raise RuntimeError(f"cannot link the shader: {log.value.decode()}")
+        self.program = link_program(gl, VERTEX, FRAGMENT)
         gl.glUseProgram(self.program)
         for unit in range(3):
             gl.glUniform1i(self._uniform(f"plane{unit}"), unit)
@@ -242,19 +273,7 @@ class Renderer:
         self.largest = largest.value  # The widest texture, e.g. 4096 on a Pi 5: the largest quilt.
         self.sets = [[None] * 3, [None] * 3]  # Per set and plane: (texture, format, width, height).
         self.turn = 0
-
-    def _shader(self, kind, source):
-        gl = self.gl
-        handle = gl.glCreateShader(kind)
-        gl.glShaderSource(handle, 1, (c_char_p * 1)(source), None)
-        gl.glCompileShader(handle)
-        compiled = c_int()
-        gl.glGetShaderiv(handle, GL_COMPILE_STATUS, byref(compiled))
-        if not compiled.value:
-            log = ctypes.create_string_buffer(4096)
-            gl.glGetShaderInfoLog(handle, 4096, None, log)
-            raise RuntimeError(f"cannot compile the shader: {log.value.decode()}")
-        return handle
+        self.graded = None  # The quilt shown with a grade, see gl_grade.py.
 
     def _uniform(self, name):
         return self.gl.glGetUniformLocation(self.program, name.encode())
@@ -286,24 +305,40 @@ class Renderer:
             gl.glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, format, GL_UNSIGNED_BYTE, pointer)
         gl.glPixelStorei(GL_UNPACK_ROW_LENGTH, 0)
 
+    def set_interleaving(self, uniform, layout, calibration, reverse, quilt_size):
+        """Sets the uniforms of TEXEL, of the program in use, through `uniform`, which finds them by name."""
+        gl = self.gl
+        gl.glUniform2f(uniform("screen"), self.width, self.height)
+        gl.glUniform1f(uniform("pitch"), calibration.pitch)
+        gl.glUniform1f(uniform("tilt"), calibration.tilt)
+        gl.glUniform1f(uniform("center"), calibration.center)
+        gl.glUniform1f(uniform("subp"), calibration.subp)
+        gl.glUniform1i(uniform("inverted"), int(calibration.inverted))
+        gl.glUniform1i(uniform("reversed"), int(reverse))
+        gl.glUniform2i(uniform("grid"), layout.columns, layout.rows)
+        gl.glUniform2i(uniform("quiltSize"), *quilt_size)
+
     def _draw(self, source, layout=None, calibration=None, reverse=False, quilt_size=(1, 1)):
         gl, uniform = self.gl, self._uniform
         gl.glUseProgram(self.program)
         gl.glUniform1i(uniform("source"), source)
         gl.glUniform2f(uniform("screen"), self.width, self.height)
         if calibration is not None:
-            gl.glUniform1f(uniform("pitch"), calibration.pitch)
-            gl.glUniform1f(uniform("tilt"), calibration.tilt)
-            gl.glUniform1f(uniform("center"), calibration.center)
-            gl.glUniform1f(uniform("subp"), calibration.subp)
-            gl.glUniform1i(uniform("inverted"), int(calibration.inverted))
-            gl.glUniform1i(uniform("reversed"), int(reverse))
-            gl.glUniform2i(uniform("grid"), layout.columns, layout.rows)
-            gl.glUniform2i(uniform("quiltSize"), *quilt_size)
+            self.set_interleaving(uniform, layout, calibration, reverse, quilt_size)
         gl.glDrawArrays(GL_TRIANGLES, 0, 3)
 
-    def quilt(self, picture, layout, calibration, reverse=False):
-        """Draws the hologram of a quilt, an RGB array, rows from the top."""
+    def quilt(self, picture, layout, calibration, reverse=False, grade=None):
+        """Draws the hologram of a quilt, an RGB array, rows from the top, with a grade, if any: the same picture
+        again, with another grade, is much faster, as what does not depend on the grade is kept."""
+        key = (id(picture), layout, calibration, reverse)
+        if self.graded is not None and self.graded.key != key:
+            self._drop_graded()
+        if grade is not None and grade.changes:
+            if self.graded is None:
+                from .gl_grade import GradedQuilt
+                self.graded = GradedQuilt(self, key, picture, layout, calibration, reverse)
+            self.graded.draw(grade)
+            return
         picture = np.ascontiguousarray(picture)
         height, width = picture.shape[:2]
         self._upload([(GL_RGB8, GL_RGB, width, height, width, picture.ctypes.data)])
@@ -311,6 +346,7 @@ class Renderer:
 
     def quilt_frame(self, frame, layout, calibration, reverse=False):
         """Draws the hologram of a quilt video's frame, a PyAV VideoFrame in YUV 4:2:0, yuv420p, as decoded."""
+        self._drop_graded()
         if frame.format.name != "yuv420p":
             frame = frame.reformat(format="yuv420p")
         width, height = frame.width, frame.height
@@ -325,6 +361,7 @@ class Renderer:
     def hologram(self, picture):
         """Draws a hologram already interleaved, of the screen's size: RGB, or XRGB8888, blue, green, red and a
         padding byte, e.g. a hologram video's frame decoded as BGRA."""
+        self._drop_graded()
         picture = np.ascontiguousarray(picture)
         height, width, channels = picture.shape
         if channels == 4:
@@ -334,7 +371,13 @@ class Renderer:
             self._upload([(GL_RGB8, GL_RGB, width, height, width, picture.ctypes.data)])
             self._draw(HOLOGRAM_RGB)
 
+    def _drop_graded(self):
+        if self.graded is not None:
+            graded, self.graded = self.graded, None
+            graded.close()
+
     def black(self):
+        self._drop_graded()
         self.gl.glClearColor(0, 0, 0, 1)
         self.gl.glClear(GL_COLOR_BUFFER_BIT)
 
@@ -407,6 +450,7 @@ class GlScreen:
     on the screen's own thread, and returns once the picture is on the screen or will be at its next refresh."""
 
     name = "gl"
+    grades = True  # show_quilt() takes a grade.
 
     def __init__(self, folder=CARDS):
         self.folder = folder
@@ -441,10 +485,12 @@ class GlScreen:
         height, width = hologram.shape[:2]
         return self._call(lambda: self._present(width, height, lambda renderer: renderer.hologram(hologram)))
 
-    def show_quilt(self, picture, layout, calibration, reverse=False):
-        """Shows the hologram of a quilt, an RGB array, interleaved by the GPU. Returns where."""
-        return self._call(lambda: self._present(calibration.width, calibration.height,
-                                                lambda renderer: renderer.quilt(picture, layout, calibration, reverse)))
+    def show_quilt(self, picture, layout, calibration, reverse=False, grade=None):
+        """Shows the hologram of a quilt, an RGB array, interleaved by the GPU, with a grade, if any. Returns
+        where."""
+        return self._call(lambda: self._present(
+            calibration.width, calibration.height,
+            lambda renderer: renderer.quilt(picture, layout, calibration, reverse, grade)))
 
     def show_quilt_frame(self, frame, layout, calibration, reverse=False):
         """Shows the hologram of a quilt video's frame, a PyAV VideoFrame, interleaved by the GPU. Returns where."""

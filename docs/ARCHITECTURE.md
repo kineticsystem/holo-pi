@@ -13,6 +13,7 @@
   - [Wayland and X11](#wayland-and-x11)
   - [DRM/KMS](#drmkms)
   - [The GPU](#the-gpu)
+  - [The Grades](#the-grades)
 - [The Server](#the-server)
   - [The API](#the-api)
   - [The Library](#the-library)
@@ -66,6 +67,8 @@ What HoloPi uses of the system:
 | [`holo_pi/x11.py`](../holo_pi/x11.py) | Full-screen on a given monitor under X11, through libX11 and ctypes. |
 | [`holo_pi/drm.py`](../holo_pi/drm.py) | The screen without a desktop: DRM/KMS, through libdrm and ctypes. |
 | [`holo_pi/gl.py`](../holo_pi/gl.py) | The screen without a desktop, drawn by the GPU: the interleaving as an OpenGL ES shader, through GBM, EGL and ctypes. |
+| [`holo_pi/grade.py`](../holo_pi/grade.py) | A quilt's grade, experimental: its parameters, its values, and the numbers the GPU needs of them. |
+| [`holo_pi/gl_grade.py`](../holo_pi/gl_grade.py) | A quilt drawn with a grade by the GPU. |
 | [`holo_pi/video.py`](../holo_pi/video.py) | Videos: reading one, with PyAV, and the `Player`, which decodes one, with the hardware decoder when there is one, and plays it on a screen in a loop. |
 | [`holo_pi/library.py`](../holo_pi/library.py) | The library: the media kept on disk, what each is, and its unique name and id. |
 | [`holo_pi/server.py`](../holo_pi/server.py) | The server: what the Looking Glass shows, from the library, and the API, with its documentation and the web page. |
@@ -171,6 +174,26 @@ On a Pi 5 the GPU, `v3d`, and the display controller, `vc4`, are two cards: Mesa
 
 Three details are easy to break. The shader and `table()` must stay the same formula: `GlTest` compares them, with a few sub-pixels allowed to differ at the edge between two views, where the GPU's 32-bit floats round otherwise than numpy's 64-bit ones. `gl_FragCoord` counts rows from the bottom, the quilt's texture from the top. A frame's rows may be longer than its width, `line_size`, which the copy must be told.
 
+### The Grades
+
+Experimental. A grade changes a quilt's light and colours as it is shown, with the tools of StepIt Grader, our desktop program that grades photographs. [`grade.py`](../holo_pi/grade.py) has the table of the parameters, `PARAMETERS`, which the API and the web page read, and the matrices and curves the shaders need of a `Grade`; it knows no OpenGL. `GradedQuilt`, in [`gl_grade.py`](../holo_pi/gl_grade.py), draws one picture with one grade after another, through the `Renderer`'s context.
+
+To follow a slider, it does only once per picture what does not depend on the grade:
+
+- **The interleaving.** For each sub-pixel of the screen, the whole colour of the quilt's pixel it shows, in three textures of the screen's size, one per sub-pixel. Each later draw then reads the same place of each, which the GPU's caches serve well, rather than three places of the quilt far apart.
+- **What the tools that look around a pixel need:** highlights, shadows, structure, detail and sharpness. Blurs and guided filters of the luminance, each view filtered alone, then interleaved into three more textures. Done when one of these tools is first used, about 0.6 seconds on a Pi 5.
+
+Each change then takes two steps: the tools that look at a pixel alone are worked out for 33 x 33 x 33 colours, into a 3D texture, the table, again only if one of them changed; and each sub-pixel of the screen takes its colour, its gain from the tools that look around it, and its result from the table. On a Pi 5 a step of a slider takes about 14 ms, from the request to its answer, or about 31 with a tool that looks around, against about 70 to upload and interleave the quilt again.
+
+| Differs from StepIt Grader | Why |
+|---|---|
+| The gain of the tools that look around a pixel goes before the others, corrected for the contrast, which follows. | The table comes last. |
+| The luminances these tools see have a floor, and the gains of detail and sharpness a limit. | A quilt often has a pure black sky, a photograph seldom: without them, its objects get a bright rim. |
+| Sharpness has no radius, 1 pixel. | Another radius would filter the quilt again at each step. |
+| No noise reduction, chromatic aberration or HDR compression. | They are for a camera's pictures. |
+
+The `Renderer` keeps the `GradedQuilt` while the same picture is shown, and gives its memory back when another is, or a video. `show_quilt()` of a screen takes a grade if the screen's `grades` is true, `GlScreen`'s only. A grade at its defaults, or switched off, draws the quilt as without one, pixel for pixel.
+
 ## The Server
 
 [`server.py`](../holo_pi/server.py) is `holo-pi serve`: FastAPI, on uvicorn, which runs on a thread of its own, while the main thread runs the screen. It shows one medium of its library at a time, a quilt or a video.
@@ -179,6 +202,7 @@ Three details are easy to break. The shader and `table()` must stay the same for
 
 - **The calibration,** read at the first need, then kept. When the drive is not mounted and the server was started with `--mount-drive`, it mounts it itself, read-only, as root, by its label, `/dev/disk/by-label/LKG-*`, under `/media/holo-pi`, with `mount_drives()` of [`calibration.py`](../holo_pi/calibration.py).
 - **The library,** see [The Library](#the-library).
+- **The grades,** kept in the library's index, `Item.grade`, and given to the screen each time the quilt is shown. `set_grade()` keeps one and shows the quilt again if it is on the screen. `Library.set_grade()` writes the index a second after the last change, and `stop()` writes what is left: a slider would wear an SD card. For the same reason, the requests that set a grade and succeed stay out of the log.
 - **The tables** of the last two layouts and sizes of quilt, in memory, about 38 MB each, for a screen without a GPU: a quilt of the same layout is a lookup.
 - **What is shown:** a quilt and its picture, or a video and the `Player` that plays it, see [The Videos](#the-videos), or the test pattern, or the default quilt of `--default-quilt`. `shown.json`, in the state folder, says which medium of the library, by its id, or the test pattern; the default quilt is shown and not kept. At start, `restore()` takes it back.
 - **Whether it is shown,** where, or why not.
@@ -245,9 +269,9 @@ The player never takes the lock of `Display`: `Display` stops it, under its lock
 | `app/` | `App`, the composition root: the real services, the store, the panels, each in an error boundary, and `useDisplayPolling()`, mounted once. |
 | `model/` | The one store, `holoPiReducer`, with `useReducer` behind a Context: the media, what is shown and the server's status, as the server last said them. Which medium is shown is derived from the display, `selectShownId()`, never copied into the list. |
 | `services/` | `HoloPiApi`, the interface of the API's client, and `makeHttpHoloPiApi()`, the real one: `fetch`, and `XMLHttpRequest` for the uploads, whose progress `fetch` cannot give. Errors are `Result`s, not exceptions. |
-| `hooks/` | The view models: `useLibrary`, whose `reorder` shows a new order at once, sends it, drops the answer of an order a newer one overtook, and reads the list again on a refusal, `useSelection`, the media ticked in the library, kept by id and derived from the list, so a medium gone is never selected, `useDisplay`, which sends one command at a time and keeps only the newest asked meanwhile, so that arrowing through the library shows the medium it stops on rather than each one it passes, `useUploads`, a queue that sends the files one after another, each with its progress and stoppable with an `AbortController`, and `useServerStatus`. `useUploads` shows the first file of those dropped together, a single one too, and keeps the views' order: the page asks only a layout, `UploadLayout`, and the API's `play` and `reverse` stay for `curl` and scripts. |
-| `components/` | Components that know only their props: the media table, which moves through its rows with `stepThrough()` of `utils/listUtils.ts`, the drop zone, the upload's form and queue, the display's card, a button that asks twice. |
-| `features/` | The panels, each a hook and its components: the header, with the link to `/api/docs`, the display, the upload and the library. |
+| `hooks/` | The view models: `useGrade`, whose changes show at once and go to the server through `makeLatest()` of `utils/latestUtils.ts`, one at a time and the newest next, `useRoute`, the page its address asks for, `useLibrary`, whose `reorder` shows a new order at once, sends it, drops the answer of an order a newer one overtook, and reads the list again on a refusal, `useSelection`, the media ticked in the library, kept by id and derived from the list, so a medium gone is never selected, `useDisplay`, which sends one command at a time and keeps only the newest asked meanwhile, so that arrowing through the library shows the medium it stops on rather than each one it passes, `useUploads`, a queue that sends the files one after another, each with its progress and stoppable with an `AbortController`, and `useServerStatus`. `useUploads` shows the first file of those dropped together, a single one too, and keeps the views' order: the page asks only a layout, `UploadLayout`, and the API's `play` and `reverse` stay for `curl` and scripts. |
+| `components/` | Components that know only their props: the media table, which moves through its rows with `stepThrough()` of `utils/listUtils.ts`, the drop zone, the upload's form and queue, the display's card, a button that asks twice, and the grading's sections and sliders, drawn from the parameters the server lists. |
+| `features/` | The panels, each a hook and its components: the header, with the link to `/api/docs`, the display, the upload, the library, and the grading page, `#/grade/<id>`, which hides the panels rather than removing them, so that the uploads go on. |
 | `test/` | The fake API, in memory, and the wrapper that renders with it. |
 
 The page asks what the Looking Glass shows every 2 seconds, `useDisplayPolling()`, so that a video's frame rate, an unplugged Looking Glass, or a change made with `curl` show on it; one request at a time, the one before aborted.
@@ -278,6 +302,9 @@ The page asks what the Looking Glass shows every 2 seconds, `useDisplayPolling()
 | `VideoTest`, in [`test_server.py`](../tests/test_server.py) | Hologram videos through the API, of 3072 x 2048, with a fake screen and a Portrait's calibration: one played and looped, its decoder, frame rate and warning, one of another size refused, a quilt replacing it, both kept, a video kept while the screen is off, or while there is no calibration, and played later, the last video after a restart, `501` without PyAV, the removal of the video shown, and a server without a state folder. Skipped without PyAV. |
 | `QuiltVideoTest`, in [`test_server.py`](../tests/test_server.py) | Quilt videos and the GPU's screen: a quilt video interleaved by the processor without a GPU, handed to a fake GPU screen as YUV frames with its layout, a quilt handed to it too, the layout from the fields, a video without a layout taken for a hologram video, and the last quilt video after a restart. Skipped without PyAV. |
 | `GlTest`, in [`test_gl.py`](../tests/test_gl.py) | The GPU's interleaving, off screen, against the processor's: a quilt, its views reversed, another layout, a video frame in YUV, a hologram copied as it is, RGB and XRGB, a quilt larger than the GPU takes, and black. Skipped without EGL and OpenGL ES 3. |
+| `GradeTest`, in [`test_grade.py`](../tests/test_grade.py) | The parameters, what of a grade is kept, its ranges, the white balance, the tone curve and the mixer. |
+| `GpuGradeTest`, in [`test_grade.py`](../tests/test_grade.py) | The GPU's grading, off screen: each tool, a nearly neutral grade within one level of the quilt as it is, the interleaving against the processor's, each view filtered alone, no rim on a black sky, and what is kept and given back between pictures. Skipped without EGL and OpenGL ES 3. |
+| `GradeTest`, in [`test_server.py`](../tests/test_server.py) | The grades through the API, with a fake GPU screen: graded at once when shown, kept when not, switched off, removed, after a restart, written after the last change, refused for a video, without a GPU or out of its range. |
 
 `pnpm test`, in `web/`, runs the web page's tests, with Vitest and Testing Library, against the fake API: the store, the formatting, the steps through and the moves in a list, the hooks `useLibrary`, `useSelection`, `useDisplay` and `useUploads`, the media asked for while the screen changes, of which only the last follows, the queue's order, failures and stops, and the components, the media table with its clicks, arrow keys and rows dragged or moved with Alt, the upload's form, its drop zone and its queue.
 
@@ -304,6 +331,8 @@ Checked by hand:
 **Add a route to the server.** Add it in `create_app()`, on `/api`, as a resource and a method rather than a verb, with a `tags`, a `summary`, a docstring, which becomes its description, a response model whose fields have a `description` and an example, and its errors in `responses`: `test_documents_every_route` checks the first three, and Swagger UI shows them all. Anything that changes what is shown goes through `Display`, under its lock. Add it to [API.md](API.md), and to `HoloPiApi` in `web/` if the page uses it.
 
 **Change the web page.** Follow the `react-developer` skill: state in the store, rules in a hook with its test, components that know only their props. `pnpm typecheck`, `pnpm test` and `pnpm build` in `web/`, then `./docker/dock.sh build` on the Pi.
+
+**Add a tool to the grades.** Add its `Parameter` to `PARAMETERS` of `grade.py`: the API, its documentation and the web page follow. Then draw it in `gl_grade.py`: in `TABLE_LAYER` if it looks at a pixel alone, in `AROUND` and `SCREEN`, and in `SPATIAL`, if it looks around. Add its test to `GpuGradeTest`.
 
 **Show on another kind of screen.** Write a class with `show`, `clear`, `run` and `close`, as [The Screens](#the-screens) describes, and open it in `open_screen()`.
 
@@ -336,6 +365,12 @@ Checked by hand:
 **GBM, EGL and OpenGL ES through ctypes, not PyOpenGL or moderngl.** As libdrm in `drm.py`: about forty functions, from libraries every Mesa installs, with no Python package to add to the image.
 
 **Raspberry Pi's FFmpeg and Mesa in the image, on arm64.** Their FFmpeg reaches the Pi 5's hardware HEVC decoder, which Debian's does not: a detailed quilt video plays at its speed with about one core, rather than in slow motion with four. The price: the image depends on Raspberry Pi's repository on arm64, and on Raspberry Pi OS's copy of its key, kept in [`docker/`](../docker), as the copy on their web site has SHA-1 signatures, which Debian 13 refuses. On amd64 the image stays Debian's, and decodes on the processor.
+
+**Grades applied as the quilt is shown, not written into it.** A grade is a few numbers beside the file: any change can be undone, and nothing is encoded again. The price: only a screen drawn by the GPU shows it, and a download is the original.
+
+**A table of colours and kept textures, not every tool in one shader.** Every tool for each sub-pixel would cost many times the interleaving at each step of a slider. The price: about 110 MB of the GPU's memory while a graded quilt is shown, 40 without the tools that look around, and colours interpolated in the table, within about a level of 255, more for the most saturated ones.
+
+**A `PUT` for each step of a slider, not a WebSocket.** One request at a time, the newest next, follows a slider at 30 to 60 steps a second, as fast as the Pi draws. The API stays REST, and `curl` can do what the page does.
 
 **A library of media on the Pi, shown by id or name.** Uploading a 120 MB video takes about 2.5 seconds over gigabit Ethernet; showing one already on the Pi, about 0.2. The Looking Glass still shows one at a time, and what it showed last comes back after a restart, e.g. after a power cut.
 

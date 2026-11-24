@@ -29,11 +29,12 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, create_model
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
 from .calibration import find_calibration, load_calibration, mount_drives
+from .grade import PARAMETERS, Grade
 from .interleave import Interleaver
 from .layout import Layout
 from .library import HOLOGRAM_VIDEO, QUILT, QUILT_VIDEO, Library, QuiltError
@@ -103,6 +104,14 @@ class Video:
     rows: Optional[int] = None
     reverse: bool = False
     id: Optional[str] = None  # Its id in the library.
+
+
+class CannotGrade(ValueError):
+    """A medium that cannot be graded: a video."""
+
+
+class NoGpu(RuntimeError):
+    """No quilt can be graded: the screen is not drawn by the GPU."""
 
 
 class Display:
@@ -236,6 +245,27 @@ class Display:
             for item in self.library.list():
                 self.library.remove(item)
 
+    # The grades.
+
+    def grade(self, item):
+        """The grade of a library's item, kept beside it."""
+        return Grade.of(item.grade)
+
+    def set_grade(self, item, grade):
+        """Keeps the grade of a library's quilt, and shows it with it at once, if it is shown. Raises CannotGrade for
+        a video, and NoGpu without a GPU."""
+        if item.is_video:
+            raise CannotGrade(f"{item.name} is a {item.kind}: only a quilt can be graded")
+        if not getattr(self.screen, "grades", False):
+            raise NoGpu("grading needs a screen drawn by the GPU: start the server with --screen gl")
+        with self.lock:
+            self.library.set_grade(item, grade)
+            if self.quilt is not None and self.quilt.id == item.id:
+                try:
+                    self._show()
+                except RuntimeError:
+                    pass  # Shown with it as soon as it can be: GET /api/display says why not yet.
+
     # What is shown.
 
     def show_test_pattern(self, reverse=False):
@@ -266,17 +296,20 @@ class Display:
             calibration = self.calibration()
             layout = Layout(quilt.columns, quilt.rows)
             if hasattr(self.screen, "show_quilt"):  # The GPU interleaves it.
-                self.shown_on = self.screen.show_quilt(self.picture, layout, calibration, quilt.reverse)
+                item = self.library.find(id=quilt.id) if quilt.id else None
+                graded = {"grade": self.grade(item)} if item is not None and item.grade else {}
+                shown_on = self.screen.show_quilt(self.picture, layout, calibration, quilt.reverse, **graded)
             else:
                 hologram = self._interleaver(calibration, layout, quilt.width, quilt.height, quilt.reverse)
-                self.shown_on = self.screen.show(hologram(self.picture))
-            self.error = None
-            log.info("Showing %s on %s", quilt.name, self.shown_on)
+                shown_on = self.screen.show(hologram(self.picture))
+            if self.shown_on is None:  # Not again at each step of a slider that grades it.
+                log.info("Showing %s on %s", quilt.name, shown_on)
+            self.shown_on, self.error = shown_on, None
             return self.shown_on
         except RuntimeError as error:
             if str(error) != self.error:
                 log.warning("Cannot show %s yet: %s", quilt.name, error)
-            self.error = str(error)
+            self.shown_on, self.error = None, str(error)
             raise
 
     # The video.
@@ -348,6 +381,7 @@ class Display:
         self.stopping.set()
         with self.lock:
             self._stop_player()
+        self.library.flush()
 
     # What was shown last, to show it again after a restart: shown.json, with the library's id, or the test quilt.
 
@@ -541,6 +575,8 @@ server on a network you trust. **Try it out** changes what the Looking Glass sho
 TAGS = [
     {"name": "media", "description": "The library: the quilts and videos kept on the server's disk. Upload, list, "
                                      "download and remove them."},
+    {"name": "grades", "description": "Experimental. How a quilt's light and colours are changed when it is shown: "
+                                      "kept beside the quilt, whose file stays as uploaded."},
     {"name": "display", "description": "What the Looking Glass shows: a medium of the library, the test pattern, "
                                        "or black."},
     {"name": "server", "description": "The server, the screen and the Looking Glass's calibration."},
@@ -642,6 +678,31 @@ class CalibrationModel(BaseModel):
     center: float = Field(description="Where view 0 starts under a lens, as a fraction of a lens.")
     subp: float = Field(description="The width of a sub-pixel, as a fraction of the screen's width.")
     inverted: bool = Field(description="Whether the views go from right to left under each lens.")
+
+
+GradeModel = create_model(
+    "GradeModel",
+    enabled=(bool, Field(True, description="Whether the quilt is shown with it: false shows it as uploaded, and keeps "
+                                           "the values.", examples=[True])),
+    **{parameter.id: (float, Field(parameter.default, ge=parameter.minimum, le=parameter.maximum,
+                                   description=parameter.description, examples=[parameter.default]))
+       for parameter in PARAMETERS})
+
+
+class GradeParameterModel(BaseModel):
+    id: str = Field(description="Its name in a grade.", examples=["exposure"])
+    label: str = Field(description="What to call it.", examples=["Exposure"])
+    section: str = Field(description="The section of the tools it belongs to.", examples=["Light"])
+    description: str = Field(description="What it does.", examples=["The light, in stops: 1 is twice as much."])
+    minimum: float = Field(description="Its least value.", examples=[-5])
+    maximum: float = Field(description="Its greatest value.", examples=[5])
+    default: float = Field(description="The value that changes nothing.", examples=[0])
+    decimals: int = Field(description="The decimals it is set and shown with.", examples=[2])
+
+
+class GradeParameterListModel(BaseModel):
+    items: list[GradeParameterModel] = Field(description="The parameters, section by section, in the order to show "
+                                                         "them.")
 
 
 class ErrorModel(BaseModel):
@@ -781,6 +842,45 @@ def create_app(display, web=None):
         display.remove(find(id))
         return Response(status_code=204)
 
+    # The grades.
+
+    @app.get("/api/grade-parameters", tags=["grades"], response_model=GradeParameterListModel,
+             summary="List the parameters of a grade")
+    def list_grade_parameters():
+        """What a grade is made of: the tools, their sections and their ranges. The web page draws its sliders from
+        it."""
+        return {"items": [asdict(parameter) for parameter in PARAMETERS]}
+
+    @app.get("/api/media/{id}/grade", tags=["grades"], response_model=GradeModel, summary="Get a quilt's grade",
+             responses=NOT_FOUND)
+    def get_grade(id: str = FastApiPath(description="The medium's id.", examples=["3f9a1c2e"])):
+        """The grade of the library's medium of this id: every value at its default if it has none."""
+        return display.grade(find(id)).full
+
+    @app.put("/api/media/{id}/grade", tags=["grades"], response_model=GradeModel, summary="Grade a quilt",
+             responses={**error(400, "A video: only a quilt can be graded."), **NOT_FOUND,
+                        **error(501, "The screen is not drawn by the GPU, --screen gl.")})
+    def put_grade(grade: GradeModel, id: str = FastApiPath(description="The medium's id.", examples=["3f9a1c2e"])):
+        """Replaces the grade of the library's quilt of this id; a value not given is at its default. If the Looking
+        Glass shows the quilt, it answers once the quilt is drawn with the grade, soon enough to follow a slider. The
+        grade is kept, also after a restart, and the quilt's file stays as uploaded."""
+        item = find(id)
+        try:
+            display.set_grade(item, Grade.of(grade.model_dump()))
+        except CannotGrade as problem:
+            raise HTTPException(400, str(problem)) from problem
+        except NoGpu as problem:
+            raise HTTPException(501, str(problem)) from problem
+        return display.grade(item).full
+
+    @app.delete("/api/media/{id}/grade", tags=["grades"], status_code=204, summary="Remove a quilt's grade",
+                responses={**error(400, "A video: only a quilt can be graded."), **NOT_FOUND,
+                           **error(501, "The screen is not drawn by the GPU, --screen gl.")})
+    def remove_grade(id: str = FastApiPath(description="The medium's id.", examples=["3f9a1c2e"])):
+        """Shows the library's quilt of this id as uploaded again."""
+        put_grade(GradeModel(), id)
+        return Response(status_code=204)
+
     # The display.
 
     @app.get("/api/display", tags=["display"], response_model=DisplayModel, summary="Get what is shown")
@@ -845,6 +945,15 @@ def create_app(display, web=None):
     return app
 
 
+class _NoGrades(logging.Filter):
+    """Leaves the grades that went well out of the log of the requests: a slider sends many a second."""
+
+    def filter(self, record):
+        arguments = record.args if isinstance(record.args, tuple) else ()
+        return not (len(arguments) == 5 and arguments[1] == "PUT" and str(arguments[2]).endswith("/grade")
+                    and arguments[4] == 200)
+
+
 def web_folder():
     """The web page's built files: $HOLO_PI_WEB, e.g. in the container, or else web/dist of the checkout."""
     return Path(os.environ.get("HOLO_PI_WEB") or Path(__file__).resolve().parents[1] / "web" / "dist")
@@ -863,6 +972,7 @@ def serve(host="0.0.0.0", port=8095, screen="auto", calibration=None, state=None
     if not (web / "index.html").exists():
         log.info("No web page in %s: build it with pnpm build in web/", web)
     server = uvicorn.Server(uvicorn.Config(create_app(display, web), host=host, port=port, log_level="info"))
+    logging.getLogger("uvicorn.access").addFilter(_NoGrades())  # After Config, which sets the loggers up.
     stop = threading.Event()
 
     def run_server():

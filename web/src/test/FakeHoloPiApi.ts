@@ -1,5 +1,5 @@
 // A HoloPi API in memory, for the tests: a library, a display, and failures on request.
-import type { Display, HoloPiApi, MediaList, Medium, ServerStatus, UploadOptions } from '../services/HoloPiApi';
+import type { Display, Grade, GradeParameter, HoloPiApi, MediaList, Medium, ServerStatus, UploadOptions } from '../services/HoloPiApi';
 import { err, ok, type Result } from '../utils/result';
 
 export function medium(fields: Partial<Medium> = {}): Medium {
@@ -9,6 +9,16 @@ export function medium(fields: Partial<Medium> = {}): Medium {
     codec: 'hevc', warning: null, shown: false, ...fields,
   };
 }
+
+function parameter(id: string, section: string, minimum = -100, maximum = 100, decimals = 0): GradeParameter {
+  const label = id[0].toUpperCase() + id.slice(1);
+  return { id, label, section, description: `What the ${id} does.`, minimum, maximum, default: 0, decimals };
+}
+
+export const PARAMETERS = [
+  parameter('saturation', 'Color'), parameter('exposure', 'Light', -5, 5, 2), parameter('contrast', 'Light'),
+  parameter('sharpness', 'Effects', 0, 150),
+];
 
 const BLACK: Display = {
   source: null, media: null, name: null, kind: null, reverse: false, shown: false, shown_on: null, error: null,
@@ -134,8 +144,39 @@ export class FakeHoloPiApi implements HoloPiApi {
     return this.answer(undefined);
   }
 
+  /** The grades kept, by their quilts' ids, and those asked for, in order. */
+  grades = new Map<string, Grade>();
+  gradesSet: Grade[] = [];
+  /** Grades wait for finishGrade(), to test what a slider sends while the screen draws. */
+  holdGrades = false;
+  private pendingGrades: (() => void)[] = [];
+  screen = 'gl';
+
+  listGradeParameters(): Promise<Result<GradeParameter[]>> {
+    return this.answer(PARAMETERS);
+  }
+
+  getGrade(id: string): Promise<Result<Grade>> {
+    return this.answer(this.grades.get(id) ?? { enabled: true, values: {} });
+  }
+
+  setGrade(id: string, grade: Grade): Promise<Result<void>> {
+    this.gradesSet.push(grade);
+    const set = () => {
+      this.grades.set(id, grade);
+      return this.answer(undefined);
+    };
+    if (!this.holdGrades) return set();
+    return new Promise(resolve => this.pendingGrades.push(() => void set().then(resolve)));
+  }
+
+  /** Lets the oldest grade waiting be drawn. */
+  finishGrade() {
+    this.pendingGrades.shift()?.();
+  }
+
   getStatus(): Promise<Result<ServerStatus>> {
-    return this.answer({ version: '0.1.0', screen: 'gl', looking_glass: { serial: 'LKG-PORT-00000', width: 1536, height: 2048 },
+    return this.answer({ version: '0.1.0', screen: this.screen, looking_glass: { serial: 'LKG-PORT-00000', width: 1536, height: 2048 },
                          calibration_error: null, display: this.display });
   }
 }

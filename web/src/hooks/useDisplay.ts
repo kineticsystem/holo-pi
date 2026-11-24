@@ -1,6 +1,7 @@
 // The display's view model: what the Looking Glass shows, as useDisplayPolling last read it, and the commands to
 // show a medium, the test pattern, or black. Used by the display panel and the library's rows.
 import { useRef, useState } from 'react';
+import { selectGradable } from '../model/holoPiStore';
 import { useHoloPiStore } from '../model/HoloPiStoreContext';
 import { useServices } from '../services/ServicesContext';
 import type { Result } from '../utils/result';
@@ -44,6 +45,7 @@ export function useDisplay() {
 
   return {
     display: state.display,
+    gradable: selectGradable(state),
     error,
     pending,
     wanted,
