@@ -66,7 +66,8 @@ test('remove asks again before it acts', async () => {
 
 test('the medium shown and a video not in H.265 are marked', () => {
   setUp('a');
-  expect(screen.getByText('on screen').closest('tr')).toHaveTextContent('helix_qs8x6a0.75.mp4');
+  expect(screen.getByText('helix_qs8x6a0.75.mp4').closest('tr')).toHaveClass('shown');
+  expect(screen.getByText('old.mp4').closest('tr')).not.toHaveClass('shown');
   expect(screen.getByText('not H.265').closest('tr')).toHaveTextContent('old.mp4');
 });
 

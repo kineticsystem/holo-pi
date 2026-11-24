@@ -134,7 +134,6 @@ export function MediaTable({ media, shownId, currentId, selected, disabled, cont
                 ? <RenameForm name={medium.name} onRename={name => onRename(medium.id, name)}
                               onDone={() => setRenaming(null)} />
                 : <span className="name">{medium.name}</span>}
-              {medium.id === shownId && <span className="badge">on screen</span>}
               {medium.grade === 'on' && (
                 <span className="badge graded" title="Shown with its grade; Download gives the original">graded</span>
               )}
