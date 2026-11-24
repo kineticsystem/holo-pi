@@ -221,6 +221,7 @@ A double click on a slider puts its default back. The buttons at the top:
 
 - **Show original** shows the quilt without its grade, to compare; **Show graded**, or moving a slider, brings the grade back.
 - **Save as new quilt** adds the graded quilt to the library, as a file of its own, a PNG named e.g. `helix-graded_qs8x6a0.75.png`, to download and show on any Looking Glass. The original and its grade stay. It takes about a second on a Pi 5.
+- **Copy grade from…** lists the other graded quilts, and replaces this quilt's grade with that of the one chosen, at once. Choose another to compare them. **Undo copy** brings back the grade from before the first copy, until a slider moves or we leave the page. Copies are independent: a later change of one quilt's grade does not change the other's.
 - **Reset** puts every tool back to its default.
 - **← Library** goes back.
 

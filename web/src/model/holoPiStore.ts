@@ -77,6 +77,11 @@ export function selectGradable(state: HoloPiState): { id: string; why: null } | 
   return { id: medium.id, why: null };
 }
 
+/** The quilts whose grade can be copied to the quilt `id`: the other graded ones, in the library's order. */
+export function selectGradeSources(state: HoloPiState, id: string): Medium[] {
+  return (state.media ?? []).filter(medium => medium.grade !== null && medium.id !== id);
+}
+
 /** The id of the medium the Looking Glass shows, or null: from the display, so the list never needs a copy. */
 export function selectShownId(state: HoloPiState): string | null {
   return state.display?.source === 'media' ? (state.display.media?.id ?? null) : null;

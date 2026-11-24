@@ -23,7 +23,8 @@ main { display: grid; grid-template-columns: minmax(20rem, 28rem) 1fr; gap: 1rem
 section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.2rem; }
 h2 { margin: 0 0 0.8rem; font-size: 1.05rem; }
 button, .button { background: #2a303a; color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 0.35rem 0.8rem; font: inherit; cursor: pointer; text-decoration: none; display: inline-block; }
-button:disabled { opacity: 0.45; cursor: default; }
+select { background: #2a303a; color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 0.35rem 0.5rem; font: inherit; max-width: 16rem; cursor: pointer; }
+button:disabled, select:disabled { opacity: 0.45; cursor: default; }
 button.primary { background: #1f4f66; border-color: #2c6f8e; }
 button.danger { border-color: #6b2f2f; color: #ffb3b3; }
 .buttons, .confirm { display: flex; gap: 0.5rem; margin-top: 0.8rem; }
