@@ -1,10 +1,10 @@
-# Play the Library One Medium after the Other
+# Play the Library One Medium after the Other, with Transitions
 
-Branch `playlist`.
+Pull request [#19](https://github.com/kineticsystem/holo-pi/pull/19), branch `playlist`.
 
 ## Goal
 
-We want the Looking Glass to play quilts and videos one after the other. We choose which ones, how many seconds a quilt stays, and how often a video loops.
+We want the Looking Glass to play quilts and videos one after the other. We choose which ones, how many seconds a quilt stays, and how often a video loops. We want common transitions between them.
 
 ## Decisions
 
@@ -62,6 +62,6 @@ Transitions without the GPU.
 
 ## Open Items
 
-It is checked with a fake screen, and the repo's quilts and videos, on a PC, the transitions with a PC's GPU off screen. To check on a Pi with a Portrait: how smooth the transitions are, above all into a video, and how they look through the lenses.
+It is checked with a fake screen, and the repo's quilts and videos, on a PC, the transitions with a PC's GPU off screen. It is deployed on a Pi 5, where a playlist of quilts plays with fade through black. To check on the Portrait: how smooth the transitions are, above all into a video, and how they look through the lenses.
 
 The README's picture of the web page is older than the tabs, and is to be taken again on a Pi.
