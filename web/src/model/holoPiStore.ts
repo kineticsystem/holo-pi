@@ -1,6 +1,6 @@
-// The page's one store: the library's media, what the Looking Glass shows, and the server's status, as the server
-// last said. Every panel reads it, and changes it through these actions only.
-import type { Display, GradeState, MediaList, Medium, ServerStatus } from '../services/HoloPiApi';
+// The page's one store: the library's media, the playlist, what the Looking Glass shows, and the server's status, as
+// the server last said. Every panel reads it, and changes it through these actions only.
+import type { Display, GradeState, MediaList, Medium, Playlist, ServerStatus } from '../services/HoloPiApi';
 
 export type HoloPiState = {
   media: Medium[] | null; // null until the first list arrives
@@ -8,6 +8,7 @@ export type HoloPiState = {
   free: number;
   display: Display | null;
   status: ServerStatus | null;
+  playlist: Playlist | null; // null until the play tab has read it
 };
 
 export type HoloPiAction =
@@ -19,9 +20,10 @@ export type HoloPiAction =
   | { type: 'mediaOrdered'; ids: string[] }
   | { type: 'allMediaRemoved' }
   | { type: 'displayRead'; display: Display }
-  | { type: 'statusRead'; status: ServerStatus };
+  | { type: 'statusRead'; status: ServerStatus }
+  | { type: 'playlistRead'; playlist: Playlist };
 
-export const initialState: HoloPiState = { media: null, size: 0, free: 0, display: null, status: null };
+export const initialState: HoloPiState = { media: null, size: 0, free: 0, display: null, status: null, playlist: null };
 
 export function holoPiReducer(state: HoloPiState, action: HoloPiAction): HoloPiState {
   switch (action.type) {
@@ -66,6 +68,8 @@ export function holoPiReducer(state: HoloPiState, action: HoloPiAction): HoloPiS
       return { ...state, display: action.display };
     case 'statusRead':
       return { ...state, status: action.status, display: action.status.display };
+    case 'playlistRead':
+      return { ...state, playlist: action.playlist };
   }
 }
 
@@ -80,6 +84,11 @@ export function selectGradable(state: HoloPiState): { id: string; why: null } | 
 /** The quilts whose grade can be copied to the quilt `id`: the other graded ones, in the library's order. */
 export function selectGradeSources(state: HoloPiState, id: string): Medium[] {
   return (state.media ?? []).filter(medium => medium.grade !== null && medium.id !== id);
+}
+
+/** Whether the Looking Glass plays the playlist. */
+export function selectPlaying(state: HoloPiState): boolean {
+  return Boolean(state.display?.playlist);
 }
 
 /** The id of the medium the Looking Glass shows, or null: from the display, so the list never needs a copy. */

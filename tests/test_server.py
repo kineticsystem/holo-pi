@@ -5,6 +5,7 @@ import io
 import json
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -15,6 +16,7 @@ from PIL import Image
 try:
     from fastapi.testclient import TestClient
 
+    from holo_pi.playlist import Entry
     from holo_pi.server import Display, create_app
 except ImportError as error:  # The server's packages are optional.
     raise unittest.SkipTest(f"no server packages: {error}")
@@ -315,7 +317,7 @@ class DisplayTest(ApiTest):
         for request in [{}, {"media_id": "a", "media_name": "b"}, {"media_id": "a", "test_pattern": True}]:
             response = self.show(**request)
             self.assertEqual(response.status_code, 400, request)
-            self.assertIn("give one of media_id, media_name and test_pattern", response.json()["error"])
+            self.assertIn("give one of media_id, media_name, test_pattern and playlist", response.json()["error"])
 
     def test_shows_the_test_pattern(self):
         display = self.show(test_pattern=True, reverse=True).json()
@@ -431,7 +433,7 @@ class ServerTest(ApiTest):
         self.assertEqual(set(spec["paths"]), {"/api/media", "/api/media/order", "/api/media/{id}",
                                               "/api/media/{id}/content", "/api/media/{id}/name",
                                               "/api/media/{id}/grade", "/api/media/{id}/graded-copies",
-                                              "/api/grade-parameters",
+                                              "/api/grade-parameters", "/api/playlist",
                                               "/api/display", "/api/status", "/api/calibration"})
         for methods in spec["paths"].values():
             for operation in methods.values():
@@ -641,6 +643,301 @@ class GradeTest(ApiTest):
         response = self.client.put(f"/api/media/{id}/grade", json={"exposure": 1})
         self.assertEqual(response.status_code, 400)
         self.assertIn("only a quilt", response.json()["error"])
+
+
+class PlaylistTest(ApiTest):
+    """The playlist, of quilts, on a fake screen."""
+
+    def setUp(self):
+        super().setUp()
+        self.ids = [self.upload(f"{name}_qs8x6a0.75.png").json()["id"] for name in "abc"]
+
+    def put(self, *items, client=None, **fields):
+        return (client or self.client).put("/api/playlist", json={"items": list(items), **fields})
+
+    def quick(self, *ids, seconds=0.2, repeat=True, display=None):
+        """A playlist of these media, each shown for less than the API allows."""
+        (display or self.display).playlist.set(repeat, [Entry(id, seconds=seconds) for id in ids])
+
+    def status(self, client=None):
+        return (client or self.client).get("/api/display").json()
+
+    def watch(self, until, what="the playlist"):
+        """The ids shown, one after the other, until `until` of them is true."""
+        seen = []
+
+        def look():
+            medium = self.status()["media"]
+            if medium and (not seen or seen[-1] != medium["id"]):
+                seen.append(medium["id"])
+            return until(seen)
+        wait_for(look, what)
+        return seen
+
+    def test_is_empty_at_first(self):
+        self.assertEqual(self.client.get("/api/playlist").json(), {"repeat": True, "items": []})
+        response = self.show(playlist=True)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("the playlist is empty", response.json()["error"])
+        self.assertIsNone(self.status()["playlist"])
+
+    def test_keeps_the_playlist_in_the_librarys_order_also_after_a_restart(self):
+        a, b, c = self.ids
+        response = self.put({"media_id": c, "seconds": 3.5}, {"media_id": a}, repeat=False)
+        self.assertEqual(response.status_code, 200, response.text)
+        kept = {"repeat": False, "items": [{"media_id": a, "enabled": True, "seconds": 10, "loops": None},
+                                           {"media_id": c, "enabled": True, "seconds": 3.5, "loops": None}]}
+        self.assertEqual(response.json(), kept)
+        _, client = self.server(FakeScreen())
+        self.assertEqual(client.get("/api/playlist").json(), kept)
+        self.client.put("/api/media/order", json={"ids": [c, b, a]})
+        self.assertEqual([item["media_id"] for item in self.client.get("/api/playlist").json()["items"]], [c, a])
+
+    def test_setting_it_changes_nothing_on_the_screen(self):
+        self.put({"media_id": self.ids[0]})
+        self.assertEqual(self.screen.frames, 0)
+
+    def test_refuses_what_it_cannot_play(self):
+        a = self.ids[0]
+        for items, status, words in [([{"media_id": "nope"}], 404, "no medium of the id 'nope'"),
+                                     ([{"media_id": a}, {"media_id": a}], 400, "given twice"),
+                                     ([{"media_id": a, "loops": 2}], 400, "is a quilt: give seconds"),
+                                     ([{"media_id": a, "seconds": 0}], 422, "seconds")]:
+            response = self.put(*items)
+            self.assertEqual(response.status_code, status, items)
+            self.assertIn(words, response.json()["error"])
+        self.assertEqual(self.client.get("/api/playlist").json()["items"], [])
+
+    def test_a_damaged_file_is_an_empty_playlist(self):
+        (self.state / "playlist.json").write_text('{"items": 3}')
+        with self.assertLogs("holo_pi.playlist", "WARNING"):
+            _, client = self.server(FakeScreen())
+        self.assertEqual(client.get("/api/playlist").json()["items"], [])
+
+    def test_plays_one_after_the_other_and_again(self):
+        a, b, c = self.ids
+        self.quick(a, b, c)
+        response = self.show(playlist=True)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual((response.json()["media"]["id"], response.json()["playlist"]),
+                         (a, {"position": 1, "count": 3}))
+        self.assertEqual(self.watch(lambda seen: len(seen) == 5), [a, b, c, a, b])
+
+    def test_leaves_out_the_media_not_enabled(self):
+        a, b, c = self.ids
+        self.display.playlist.set(True, [Entry(a, seconds=0.2), Entry(b, enabled=False), Entry(c, seconds=0.2)])
+        self.show(playlist=True)
+        self.assertEqual(self.watch(lambda seen: len(seen) == 3), [a, c, a])
+        self.assertEqual(self.status()["playlist"]["count"], 2)
+
+    def test_shows_each_for_its_time(self):
+        a, b, _ = self.ids
+        self.display.playlist.set(True, [Entry(a, seconds=0.6), Entry(b, seconds=0.1)])
+        self.show(playlist=True)
+        start = time.monotonic()
+        wait_for(lambda: self.status()["media"]["id"] == b, "the second")
+        self.assertGreater(time.monotonic() - start, 0.5)
+
+    def test_without_repeat_it_ends_black(self):
+        self.quick(*self.ids[:2], repeat=False)
+        self.show(playlist=True)
+        wait_for(self.screen.cleared.is_set, "black")
+        wait_for(lambda: self.status()["source"] is None, "nothing")
+        self.assertIsNone(self.status()["playlist"])
+        self.assertFalse((self.state / "shown.json").exists())
+
+    def test_showing_something_else_ends_it(self):
+        a, b, c = self.ids
+        for other, source in [({"media_id": c}, "media"), ({"test_pattern": True}, "test pattern")]:
+            self.quick(a, b)
+            self.show(playlist=True)
+            run = self.display.run
+            self.show(**other)
+            run.thread.join(5)
+            self.assertFalse(run.thread.is_alive())
+            threading.Event().wait(0.4)  # More than the time of a medium.
+            self.assertEqual((self.status()["source"], self.status()["playlist"]), (source, None))
+
+    def test_black_ends_it(self):
+        self.quick(*self.ids)
+        self.show(playlist=True)
+        run = self.display.run
+        self.client.delete("/api/display")
+        run.thread.join(5)
+        threading.Event().wait(0.4)
+        self.assertEqual((self.status()["source"], self.screen.shown), (None, None))
+
+    def test_an_upload_shown_ends_it_and_one_only_kept_does_not(self):
+        self.quick(*self.ids)
+        self.show(playlist=True)
+        self.upload("d_qs8x6a0.75.png")
+        self.assertIsNotNone(self.status()["playlist"])
+        self.upload("e_qs8x6a0.75.png", play=True)
+        self.assertIsNone(self.status()["playlist"])
+
+    def test_playing_it_again_starts_it_again(self):
+        a, b, _ = self.ids
+        self.display.playlist.set(True, [Entry(a, seconds=0.1), Entry(b, seconds=60)])
+        self.show(playlist=True)
+        wait_for(lambda: self.status()["media"]["id"] == b, "the second")
+        first = self.display.run
+        self.assertEqual(self.show(playlist=True).json()["media"]["id"], a)
+        first.thread.join(5)
+        self.assertFalse(first.thread.is_alive())
+
+    def test_a_change_counts_from_the_next_medium_on(self):
+        a, b, c = self.ids
+        self.quick(a, b, seconds=0.4)
+        self.show(playlist=True)
+        self.quick(a, c, seconds=0.4)
+        self.assertEqual(self.status()["media"]["id"], a)
+        self.assertEqual(self.watch(lambda seen: len(seen) == 3), [a, c, a])
+
+    def test_emptying_it_ends_it(self):
+        self.quick(*self.ids)
+        self.show(playlist=True)
+        self.put()
+        wait_for(lambda: self.status()["source"] is None, "black")
+
+    def test_removing_the_medium_shown_goes_on_to_the_next(self):
+        a, b, c = self.ids
+        self.quick(a, b, c, seconds=60)
+        self.show(playlist=True)
+        for gone, then in [(a, b), (b, c)]:
+            self.assertEqual(self.client.delete(f"/api/media/{gone}").status_code, 204)
+            wait_for(lambda: (self.status()["media"] or {}).get("id") == then, "the next")
+        self.client.delete(f"/api/media/{c}")
+        wait_for(lambda: self.status()["source"] is None, "black")
+
+    def test_removing_every_medium_ends_it(self):
+        self.quick(*self.ids)
+        self.show(playlist=True)
+        self.client.delete("/api/media")
+        self.assertEqual((self.status()["source"], self.status()["playlist"]), (None, None))
+
+    def test_waits_for_the_looking_glass(self):
+        a, b, _ = self.ids
+        self.quick(a, b)
+        self.screen.on = False
+        response = self.show(playlist=True)
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("no screen of 1536 x 2048", response.json()["error"])
+        threading.Event().wait(0.5)  # Nobody has seen the first one: it is still its turn.
+        status = self.status()
+        self.assertEqual((status["media"]["id"], status["shown"], status["playlist"]["position"]), (a, False, 1))
+        self.screen.on = True
+        self.display.retry()
+        self.assertTrue(self.status()["shown"])
+        wait_for(lambda: self.status()["media"]["id"] == b, "the second")
+
+    def test_leaves_out_a_damaged_file(self):
+        a, b, c = self.ids
+        self.display.library.path(self.display.library.find(id=b)).write_bytes(b"damaged")
+        self.quick(a, b, c)
+        with self.assertLogs("holo_pi.playlist", "WARNING"):
+            self.show(playlist=True)
+            self.assertEqual(self.watch(lambda seen: len(seen) == 3), [a, c, a])
+
+    def test_says_so_when_nothing_can_be_shown(self):
+        a = self.ids[0]
+        self.display.library.path(self.display.library.find(id=a)).write_bytes(b"damaged")
+        self.quick(a)
+        response = self.show(playlist=True)
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("a_qs8x6a0.75.png", response.json()["error"])
+        self.assertIn("a_qs8x6a0.75.png", self.status()["error"])
+
+    def test_plays_again_after_a_restart(self):
+        self.quick(*self.ids)
+        self.show(playlist=True)
+        self.display.stop()
+        screen = FakeScreen()
+        display, client = self.server(screen)
+        display.restore()
+        display.retry()
+        wait_for(lambda: self.status(client)["shown"], "the first")
+        self.assertEqual(self.status(client)["playlist"]["count"], 3)
+        wait_for(lambda: screen.frames >= 3, "the others")
+
+    def test_a_restart_after_its_media_are_gone_shows_the_default(self):
+        self.quick(self.ids[0])
+        self.show(playlist=True)
+        self.display.stop()
+        self.display.library.remove(self.display.library.find(id=self.ids[0]))
+        display, client = self.server(FakeScreen(), default="numbers")
+        display.restore()
+        display.retry()
+        self.assertEqual((self.status(client)["source"], self.status(client)["playlist"]), ("test pattern", None))
+
+
+@unittest.skipIf(hologram_video is None, "no PyAV")
+class VideoPlaylistTest(ApiTest):
+    """The playlist, of a quilt video and a quilt, on a fake screen with a GPU."""
+
+    def setUp(self):
+        super().setUp()
+        self.screen = GpuScreen()
+        self.display, self.client = self.server(self.screen)
+        video = quilt_video(self.state / "made.mkv", numbered_quilt()).read_bytes()
+        self.video = self.upload("video_qs8x6a0.75.mkv", video).json()["id"]
+        self.quilt_id = self.upload().json()["id"]
+
+    def test_a_video_takes_loops_once_by_default(self):
+        response = self.client.put("/api/playlist", json={"items": [{"media_id": self.video}]})
+        self.assertEqual(response.json()["items"][0], {"media_id": self.video, "enabled": True, "seconds": None,
+                                                       "loops": 1})
+        response = self.client.put("/api/playlist", json={"items": [{"media_id": self.video, "seconds": 3}]})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("give loops", response.json()["error"])
+
+    def test_plays_a_video_its_loops_then_the_quilt(self):
+        self.display.playlist.set(True, [Entry(self.video, loops=3), Entry(self.quilt_id, seconds=60)])
+        self.show(playlist=True)
+        wait_for(lambda: self.screen.quilts, "the quilt")
+        # 3 times 4 frames; a busy computer may skip a late one, but none is shown beyond.
+        self.assertLessEqual(len(self.screen.frames_shown), 12)
+        self.assertGreater(len(self.screen.frames_shown), 8)
+        status = self.client.get("/api/display").json()
+        self.assertEqual((status["kind"], status["playlist"]), ("quilt", {"position": 2, "count": 2}))
+        self.assertIsNone(self.display.player)
+
+    def test_goes_from_the_quilt_to_the_video_and_back(self):
+        self.display.playlist.set(True, [Entry(self.video), Entry(self.quilt_id, seconds=0.1)])
+        self.show(playlist=True)
+        wait_for(lambda: len(self.screen.quilts) >= 3, "three rounds")
+
+    def test_a_video_shown_by_itself_still_loops(self):
+        self.display.playlist.set(True, [Entry(self.video), Entry(self.quilt_id, seconds=60)])
+        self.show(playlist=True)
+        self.show(media_id=self.video)
+        self.screen.frames_shown.clear()
+        wait_for(lambda: len(self.screen.frames_shown) >= 10, "more than two rounds")
+
+    def test_leaves_out_a_video_of_a_damaged_file(self):
+        path = self.display.library.path(self.display.library.find(id=self.video))
+        path.write_bytes(b"damaged")
+        self.display.playlist.set(True, [Entry(self.video), Entry(self.quilt_id, seconds=60)])
+        with self.assertLogs("holo_pi.playlist", "WARNING"):
+            response = self.show(playlist=True)
+        self.assertEqual((response.status_code, response.json()["media"]["id"]), (200, self.quilt_id))
+
+    def test_a_video_waits_for_the_looking_glass_and_then_plays_whole(self):
+        self.display.playlist.set(True, [Entry(self.video), Entry(self.quilt_id, seconds=60)])
+        on = self.screen.show_quilt_frame
+
+        def show_quilt_frame(*arguments):
+            if not self.screen.on:
+                raise RuntimeError("no screen of 1536 x 2048")
+            return on(*arguments)
+        self.screen.show_quilt_frame = show_quilt_frame
+        self.screen.on = False
+        with mock.patch("holo_pi.video.RETRY_S", 0.05):
+            self.assertEqual(self.show(playlist=True).status_code, 503)
+            threading.Event().wait(0.5)  # More than its 4 frames take.
+            self.assertEqual(self.client.get("/api/display").json()["media"]["id"], self.video)
+            self.screen.on = True
+            wait_for(lambda: self.screen.quilts, "the quilt")
+        self.assertGreaterEqual(len(self.screen.frames_shown), 3)
 
 
 @unittest.skipIf(hologram_video is None, "no PyAV")

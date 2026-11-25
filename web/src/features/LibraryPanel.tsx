@@ -14,8 +14,7 @@ export function LibraryPanel() {
   const selection = useSelection((library.media ?? []).map(medium => medium.id));
   const count = selection.selected.length;
   return (
-    <section>
-      <h2>Library</h2>
+    <section aria-label="Library">
       <p className="totals">
         {library.media ? `${library.media.length} media, ${formatBytes(library.size)}; ` : ''}
         {formatBytes(library.free)} free

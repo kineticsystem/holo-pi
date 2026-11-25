@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { medium } from '../test/FakeHoloPiApi';
-import { holoPiReducer, initialState, selectGradable, selectGradeSources, selectShownId } from './holoPiStore';
+import { holoPiReducer, initialState, selectGradable, selectGradeSources, selectPlaying, selectShownId } from './holoPiStore';
 
 const listed = holoPiReducer(initialState, {
   type: 'mediaListed', list: { items: [medium({ id: 'a', size: 100 }), medium({ id: 'b', size: 50 })], size: 150, free: 1000 },
@@ -71,6 +71,12 @@ describe('the store', () => {
     expect(selectShownId(pattern)).toBeNull();
   });
 
+  test('whether the playlist plays comes from the display', () => {
+    expect(selectPlaying(listed)).toBe(false);
+    const display = { ...initialDisplay(), playlist: { position: 1, count: 2 } };
+    expect(selectPlaying(holoPiReducer(listed, { type: 'displayRead', display }))).toBe(true);
+  });
+
   test('the quilt shown can be graded, through the GPU, and nothing else', () => {
     function shows(kind: 'quilt' | 'quilt video') {
       const display = { ...initialDisplay(), source: 'media', media: medium({ id: 'b', kind }) } as const;
@@ -86,5 +92,5 @@ describe('the store', () => {
 
 function initialDisplay() {
   return { source: null, media: null, name: null, kind: null, reverse: false, shown: false, shown_on: null,
-           error: null, frame_rate: null, decoder: null, warning: null };
+           error: null, frame_rate: null, decoder: null, warning: null, playlist: null };
 }

@@ -149,6 +149,36 @@ class VideoTest(unittest.TestCase):
         self.assertEqual(player.shown_on, "the fake screen")
         self.assertFalse(player.thread.is_alive() or player.decoder.is_alive())
 
+    def test_plays_its_loops_then_ends_once_the_last_frame_has_had_its_time(self):
+        screen = RecordingScreen()
+        player = Player(hologram_video(self.path / "test.mkv", 64, 16, fps=10), screen.show, loops=2).start()
+        try:
+            screen.wait_for(8)
+            last = time.monotonic()
+            self.assertFalse(player.ended.is_set())
+            self.assertTrue(player.ended.wait(5))
+            self.assertGreater(time.monotonic() - last, 0.05)
+        finally:
+            player.stop()
+        self.assertEqual(screen.colours, COLOURS * 2)
+        self.assertEqual((player.broken, player.shown_on), (False, "the fake screen"))
+        self.assertFalse(player.thread.is_alive() or player.decoder.is_alive())
+
+    def test_shows_the_same_frame_when_the_screen_comes_back(self):
+        screen = RecordingScreen()
+        screen.on = False
+        with mock.patch("holo_pi.video.RETRY_S", 0.05):
+            player = Player(hologram_video(self.path / "test.mkv", 64, 16), screen.show, loops=1).start()
+            try:
+                player.started.wait(5)
+                time.sleep(0.5)  # More than the video's 4 frames.
+                self.assertFalse(player.ended.is_set())
+                screen.on = True
+                self.assertTrue(player.ended.wait(5))
+            finally:
+                player.stop()
+        self.assertEqual(screen.colours[0], COLOURS[0])
+
     def test_keeps_the_frame_rate(self):
         screen = RecordingScreen()
         player = Player(hologram_video(self.path / "test.mkv", 64, 16, fps=50), screen.show).start()
@@ -213,6 +243,7 @@ class VideoTest(unittest.TestCase):
         player.decoder.join(5)
         self.assertFalse(player.thread.is_alive() or player.decoder.is_alive())
         self.assertIn("cannot play the video", player.error)
+        self.assertTrue(player.broken and player.ended.is_set())
 
 
 if __name__ == "__main__":
