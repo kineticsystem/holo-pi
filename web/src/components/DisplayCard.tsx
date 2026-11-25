@@ -3,6 +3,9 @@ import type { Display } from '../services/HoloPiApi';
 
 export function DisplayCard({ display }: { display: Display | null }) {
   if (display === null) return <p className="empty">Asking the server…</p>;
+  if (display.source === null && display.playlist) {
+    return <p className="warning">The playlist: {display.error ?? 'starting'}</p>;
+  }
   if (display.source === null) return <p className="black">Black: nothing is shown.</p>;
   const what = display.source === 'test pattern' ? 'The test pattern'
     : display.source === 'default' ? `The default quilt, ${display.name}` : display.name;
@@ -16,6 +19,12 @@ export function DisplayCard({ display }: { display: Display | null }) {
         <>
           <dt>Grade</dt>
           <dd>{display.media.grade === 'on' ? 'on' : 'off: shown without it'}</dd>
+        </>
+      )}
+      {display.playlist && (
+        <>
+          <dt>Playlist</dt>
+          <dd>{display.playlist.position === null ? 'playing' : `${display.playlist.position} of ${display.playlist.count}`}</dd>
         </>
       )}
       <dt>On the screen</dt>

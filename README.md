@@ -17,6 +17,7 @@
   - [Grade a Quilt](#grade-a-quilt)
   - [The Library](#the-library)
   - [Play a Video](#play-a-video)
+  - [Play One after the Other](#play-one-after-the-other)
   - [Make a Quilt Video](#make-a-quilt-video)
   - [Check the Looking Glass with the Test Pattern](#check-the-looking-glass-with-the-test-pattern)
   - [The API](#the-api)
@@ -158,7 +159,7 @@ Reboot. The login prompt is only of use with a keyboard and a user with a passwo
 
 ### The Web Page
 
-The Pi serves a web page, on the same port as its API: http://holo.local:8095, or the Pi's address, e.g. http://192.168.100.41:8095. It shows what the Looking Glass shows, with a video's frame rate and decoder, and the media kept on the Pi: a click on a row shows it, the arrow keys show the one above or below, a row dragged by its grip, ⠿, or moved with Alt and the arrow keys, puts the library in another order, and each can be renamed, downloaded or removed, one, those ticked or all at once; quilts and videos dropped on it, one or many, are uploaded, and the first is shown at once. Its header links the API's documentation.
+The Pi serves a web page, on the same port as its API: http://holo.local:8095, or the Pi's address, e.g. http://192.168.100.41:8095. It shows what the Looking Glass shows, with a video's frame rate and decoder, and the media kept on the Pi: a click on a row shows it, the arrow keys show the one above or below, a row dragged by its grip, ⠿, or moved with Alt and the arrow keys, puts the library in another order, and each can be renamed, downloaded or removed, one, those ticked or all at once; quilts and videos dropped on it, one or many, are uploaded, and the first is shown at once. Its **Play** tab, next to **Library**, plays them [one after the other](#play-one-after-the-other). Its header links the API's documentation.
 
 <p align="center"><img src="docs/images/web-page.png" alt="HoloPi's web page: on the left, what the Looking Glass shows, the helix quilt video at 23.2 of 24 frames per second with the hardware decoder, and the upload, an area to drop files on with their layout; on the right, the library of five quilts and quilt videos, each row with a box to tick, Download and Remove, the helix video's row marked on screen." width="700"></p>
 
@@ -272,6 +273,25 @@ As for a quilt, the layout comes from the file's name, e.g. `_qs8x6a0.75`, or fr
 
 A video without a layout is a hologram video: every frame is already interleaved for one Looking Glass, the image its screen shows. The Portrait keeps such videos on its own drive, next to its calibration, e.g. `Anna.jpg__lkgrec.mp4`, HEVC at 3072 x 2048 and 12 frames per second, and plays them without a computer. HoloPi shows each frame as it is, so a hologram video plays right only on the Looking Glass whose calibration made it. Its frames are the screen's size, 1536 x 2048 for a Portrait, or twice as wide, 3072 x 2048, as the Portrait's own; any other size is refused with `400`.
 
+### Play One after the Other
+
+The **Play** tab of the web page plays quilts and videos of the library one after the other. Tick those to play, or the box at the top for all of them, and set for how long: a quilt in seconds, a video in how many times it plays. Then click **Play**. The tab says how long they take together, and marks the one playing.
+
+- They play in the library's order: drag a row in the **Library** tab to change it.
+- **Repeat** starts again after the last one. Without it, the Looking Glass shows black at the end.
+- **Transition** is how one goes into the next, and how long that takes: a cross fade, a fade through black or through white, or none. The pictures keep their depth, as each view goes into the same view of the next. The Pi's GPU draws it, `--screen gl`, as in the container; otherwise it is disabled and says why.
+- **Stop** shows black.
+- A change counts from the next medium on, with nothing to start again.
+
+The Pi plays them by itself: the browser can be closed, and after a restart the Pi plays them again, from the first. Anything else shown ends it: a click on a row of the library, the test pattern, or an upload from the page, which shows its first file. The last picture stays on the Portrait until the next one is ready, and the transition starts, about 0.8 seconds for a quilt and about 0.2 for a video on a Pi 5.
+
+A script does the same with [the API](docs/API.md#the-playlist), e.g. a quilt for 15 seconds, then a video twice:
+
+```bash
+curl -X PUT -H "Content-Type: application/json" -d '{"items": [{"media_id": "<id of a quilt>", "seconds": 15}, {"media_id": "<id of a video>", "loops": 2}]}' http://holo.local:8095/api/playlist
+curl -X PUT -H "Content-Type: application/json" -d '{"playlist": true}' http://holo.local:8095/api/display
+```
+
 ### Make a Quilt Video
 
 A quilt video plays best on a Pi 5 as HEVC, which its hardware decoder decodes with little of the processor, at 24 frames per second, with a Portrait's usual quilt of 8 x 6 views, 3360 x 3360. From numbered quilts, `frame_0001.png`, `frame_0002.png`, and so on, with FFmpeg:
@@ -301,8 +321,10 @@ The API is on `/api`, documented by the server itself with Swagger UI on [`/api/
 | `DELETE /api/media/{id}/grade` | Removes its grade. |
 | `POST /api/media/{id}/graded-copies` | Saves the quilt with its grade, as a new quilt. |
 | `GET /api/grade-parameters` | What a grade is made of, with the ranges. |
+| `GET /api/playlist` | Which media play one after the other, see [Play One after the Other](#play-one-after-the-other). |
+| `PUT /api/playlist` | Sets them, and for how long each, `{"items": [...]}`. |
 | `GET /api/display` | What the Looking Glass shows, whether it is on the screen, where or why not, and how a video plays. |
-| `PUT /api/display` | Shows a medium of the library, `{"media_id": ...}` or `{"media_name": ...}`, or the test pattern, `{"test_pattern": true}`. |
+| `PUT /api/display` | Shows a medium of the library, `{"media_id": ...}` or `{"media_name": ...}`, the test pattern, `{"test_pattern": true}`, or the playlist, `{"playlist": true}`. |
 | `DELETE /api/display` | Shows black; what was shown stays in the library. |
 | `GET /api/status` | The server's version, its screen, the Looking Glass, and what it shows. |
 | `GET /api/calibration` | The Looking Glass's calibration. |

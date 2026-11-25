@@ -1,5 +1,6 @@
 // The display's view model: what the Looking Glass shows, as useDisplayPolling last read it, and the commands to
-// show a medium, the test pattern, or black. Used by the display panel and the library's rows.
+// show a medium, the test pattern, the playlist, or black. Used by the display panel, the library's rows and the play
+// tab.
 import { useRef, useState } from 'react';
 import { selectGradable } from '../model/holoPiStore';
 import { useHoloPiStore } from '../model/HoloPiStoreContext';
@@ -56,6 +57,10 @@ export function useDisplay() {
     showTestPattern: () => {
       setWanted(null);
       return run(() => api.showTestPattern());
+    },
+    showPlaylist: () => {
+      setWanted(null);
+      return run(() => api.showPlaylist());
     },
     showBlack: () => {
       setWanted(null);

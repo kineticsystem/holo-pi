@@ -1,7 +1,7 @@
 // The real client of HoloPi's API, over HTTP, on the server that serves the page: fetch for the requests, and
 // XMLHttpRequest for the uploads, as fetch cannot say how much of a request is sent.
 import { err, ok, type Result } from '../utils/result';
-import type { Display, Grade, GradeParameter, HoloPiApi, MediaList, Medium, ServerStatus, UploadOptions } from './HoloPiApi';
+import type { Display, Grade, GradeParameter, HoloPiApi, MediaList, Medium, Playlist, ServerStatus, UploadOptions } from './HoloPiApi';
 
 /** What an answer that is not ok says: the server's {"error": ...}, or else its status. */
 async function problem(response: Response): Promise<string> {
@@ -50,7 +50,10 @@ export function makeHttpHoloPiApi(baseUrl = ''): HoloPiApi {
     getDisplay: signal => request<Display>(`${api}/display`, { signal }),
     showMedium: id => request<Display>(`${api}/display`, json('PUT', { media_id: id })),
     showTestPattern: () => request<Display>(`${api}/display`, json('PUT', { test_pattern: true })),
+    showPlaylist: () => request<Display>(`${api}/display`, json('PUT', { playlist: true })),
     showBlack: () => request<void>(`${api}/display`, { method: 'DELETE' }),
+    getPlaylist: signal => request<Playlist>(`${api}/playlist`, { signal }),
+    setPlaylist: playlist => request<Playlist>(`${api}/playlist`, json('PUT', playlist)),
     listGradeParameters: signal =>
       map(request<{ items: GradeParameter[] }>(`${api}/grade-parameters`, { signal }), list => list.items),
     getGrade: (id, signal) => map(request<FlatGrade>(`${api}/media/${encodeURIComponent(id)}/grade`, { signal }), toGrade),

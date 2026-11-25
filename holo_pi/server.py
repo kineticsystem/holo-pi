@@ -9,6 +9,8 @@ after a restart. A quilt that cannot be shown yet, e.g. because the Looking
 Glass is switched off, is kept, and shown as soon as it can be. A video, already
 interleaved for this Looking Glass, plays in a loop on a thread of its own, the
 Player's, until a quilt or another video replaces it; it is kept as a quilt is.
+The playlist, see playlist.py, shows one after the other, until something else
+is shown.
 
 See docs/API.md for the API, and http://<host>:8095/docs for the same, live.
 """
@@ -41,9 +43,13 @@ from .interleave import Interleaver
 from .layout import Layout
 from .library import HOLOGRAM_VIDEO, QUILT, QUILT_VIDEO, Library, NameTaken, QuiltError
 from .numbers import numbers_quilt
+from .playlist import LOOPS, SECONDS, EmptyPlaylist, Entry, Playlist, Run
 from .quilt import read_quilt
 from .screen import open_screen
-from .video import NoPyAV, Player, VideoError, hologram_pictures, step, yuv_frames
+from .transition import CUT
+from .transition import KINDS as TRANSITIONS
+from .transition import SECONDS as TRANSITION_SECONDS
+from .video import NoPyAV, Player, Unplayable, VideoError, hologram_pictures, step, yuv_frames
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +60,7 @@ TABLES = 2
 NUMBERS = "numbers"
 KEPT = "The quilt is kept, and shown as soon as it can be."
 SHOWN = "shown.json"  # What was shown last, in the state folder.
+PLAYLIST = "playlist.json"
 # Where what the Looking Glass shows comes from: the library, the test pattern, or the default quilt.
 MEDIA, TEST_PATTERN, DEFAULT = "media", "test pattern", "default"
 # How long an upload waits for the video's first frame on the screen, before it answers.
@@ -106,6 +113,7 @@ class Video:
     rows: Optional[int] = None
     reverse: bool = False
     id: Optional[str] = None  # Its id in the library.
+    loops: Optional[int] = None  # How often it plays, in the playlist; None: in a loop.
 
 
 class CannotGrade(ValueError):
@@ -143,6 +151,8 @@ class Display:
         self.video_error = None  # Why the video has no player, e.g. no calibration yet.
         self.scratch = None if self.state else tempfile.TemporaryDirectory(prefix="holo-pi-")
         self.library = Library(self._folder() / "library")
+        self.playlist = Playlist(self._folder() / PLAYLIST, self.library)
+        self.run = None  # The playlist's Run while it plays: what is shown is then its medium.
         self.stopping = threading.Event()
 
     def _folder(self):
@@ -208,24 +218,30 @@ class Display:
 
     def play_item(self, item, picture=None):
         """Shows a library's item; `picture`, a quilt's, if it is read already."""
-        path = self.library.path(item)
-        if item.is_video:
-            with self.lock:
-                self._drop_video()
-                self.quilt, self.picture, self.shown_on, self.error = None, None, None, None
-                self.video = Video(item.name, item.width, item.height, item.fps, item.frames, item.duration,
-                                   item.codec, item.uploaded, str(path), item.columns, item.rows, item.reverse, item.id)
-                self._keep({"id": item.id})
-                return self._play()
-        if picture is None:
+        if picture is None and not item.is_video:
             try:
-                picture = read_quilt(path, item.name)
+                picture = read_quilt(self.library.path(item), item.name)
             except RuntimeError as error:
                 raise QuiltError(str(error)) from error
         with self.lock:
-            self._set(Quilt(item.name, item.columns, item.rows, item.reverse, item.width, item.height, item.uploaded,
-                            str(path), item.id), picture, {"id": item.id})
-            return self._show()
+            self._end_run()
+            self._keep({"id": item.id})
+            return self._show_item(item, picture)
+
+    def _show_item(self, item, picture, loops=None, kind=CUT):
+        """Shows a library's item, a quilt's `picture`, or a video `loops` times, or in a loop, after a transition of
+        this kind. Returns where."""
+        path = self.library.path(item)
+        self._drop_video()  # First: a last frame of it must not go into the transition.
+        self._transition(kind)
+        if item.is_video:
+            self.quilt, self.picture, self.shown_on, self.error = None, None, None, None
+            self.video = Video(item.name, item.width, item.height, item.fps, item.frames, item.duration, item.codec,
+                               item.uploaded, str(path), item.columns, item.rows, item.reverse, item.id, loops)
+            return self._play()
+        self._set(Quilt(item.name, item.columns, item.rows, item.reverse, item.width, item.height, item.uploaded,
+                        str(path), item.id), picture)
+        return self._show()
 
     def shown_id(self):
         """The library's id of what is shown, or None."""
@@ -233,19 +249,63 @@ class Display:
             return (self.video or self.quilt).id if (self.video or self.quilt) else None
 
     def remove(self, item):
-        """Removes an item from the library; if it is shown, shows black."""
+        """Removes an item from the library; if it is shown, shows black, or the playlist's next."""
         with self.lock:
-            if self.shown_id() == item.id:
+            if self.run is None and self.shown_id() == item.id:
                 self.clear()
             self.library.remove(item)
+            if self.run is not None:
+                self.run.skip(item.id)
 
     def remove_all(self):
         """Empties the library; shows black if what is shown came from it."""
         with self.lock:
-            if self.shown_id() is not None:
+            if self.run is not None or self.shown_id() is not None:
                 self.clear()
             for item in self.library.list():
                 self.library.remove(item)
+
+    # The playlist.
+
+    def play_playlist(self):
+        """Plays the playlist, from its first medium. Raises EmptyPlaylist if there is nothing to play, and
+        RuntimeError if its first medium cannot be shown yet: it is, as soon as it can be."""
+        with self.lock:
+            if not self.playlist.playable():
+                raise EmptyPlaylist("the playlist is empty: enable a medium of the library in it, PUT /api/playlist")
+            self._end_run()
+            self._keep({"playlist": True})
+            run = self.run = Run(self.playlist, self).start()
+        if not run.started.wait(STARTED_S):
+            raise RuntimeError("the playlist's first medium is not on the screen yet")
+        if run.error:
+            raise RuntimeError(run.error)
+
+    def show_next(self, run, item, entry, picture):
+        """Shows the next medium of `run`, unless something else has been shown since. Raises RuntimeError if it cannot
+        be shown yet, Unplayable or ValueError if never."""
+        with self.lock:
+            if self.run is run:
+                # The same medium again, e.g. the only one, stays as it is.
+                kind = self.playlist.transition if item.id != self.shown_id() else CUT
+                self._show_item(item, picture, entry.loops, kind)
+
+    def _transition(self, kind):
+        """Has the next picture come with a transition, if the screen can, or ends the one under way."""
+        if hasattr(self.screen, "transition"):
+            self.screen.transition(kind, self.playlist.transition_seconds)
+
+    def finish(self, run):
+        """Shows black, as `run` is over, unless something else has been shown since."""
+        with self.lock:
+            if self.run is run:
+                log.info("The playlist is over")
+                self.clear()
+
+    def _end_run(self):
+        if self.run is not None:
+            self.run.end()
+            self.run = None
 
     # The grades.
 
@@ -294,23 +354,25 @@ class Display:
         """Shows the test pattern: the test quilt of numbered views."""
         picture = numbers_quilt()
         with self.lock:
-            self._set(Quilt(NUMBERS, 8, 6, reverse, picture.shape[1], picture.shape[0], _now(), None), picture,
-                      {"numbers": True, "reverse": reverse})
+            self._end_run()
+            self._keep({"numbers": True, "reverse": reverse})
+            self._drop_video()
+            self._transition(CUT)
+            self._set(Quilt(NUMBERS, 8, 6, reverse, picture.shape[1], picture.shape[0], _now(), None), picture)
             return self._show()
 
     def clear(self):
         """Shows black: what was shown stays in the library."""
         with self.lock:
+            self._end_run()
             self._drop_video()
             self.quilt, self.picture, self.shown_on, self.error = None, None, None, None
             self._forget()
             self.screen.clear()
 
-    def _set(self, quilt, picture, kept=None):
+    def _set(self, quilt, picture):
         self._drop_video()
         self.quilt, self.picture, self.shown_on, self.error = quilt, picture, None, None
-        if kept is not None:
-            self._keep(kept)
 
     def _show(self):
         quilt = self.quilt
@@ -338,7 +400,8 @@ class Display:
 
     def _play(self):
         """Starts the player of the video, and waits for its first frame. Returns where it is shown; raises
-        RuntimeError if it cannot be, yet: when the player has the error, it tries again by itself."""
+        RuntimeError if it cannot be, yet: when the player has the error, it tries again by itself; and Unplayable if
+        it never can be."""
         video = self.video
         try:
             calibration = self.calibration()
@@ -351,12 +414,12 @@ class Display:
             if str(error) != self.video_error:
                 log.warning("Cannot play %s yet: %s", video.name, error)
             self.video_error = str(error)
-            raise RuntimeError(str(error)) from error
+            raise (Unplayable if isinstance(error, VideoError) else RuntimeError)(str(error)) from error
         self.video_error = None
-        self.player = Player(video.file, show, convert).start()
+        self.player = Player(video.file, show, convert, video.loops).start()
         self.player.started.wait(STARTED_S)
         if self.player.shown_on is None:
-            raise RuntimeError(self.player.error or "the video's first frame is not on the screen yet")
+            raise (Unplayable if self.player.broken else RuntimeError)(self.player.error or "the video's first frame is not on the screen yet")
         log.info("Playing %s on %s", video.name, self.player.shown_on)
         return self.player.shown_on
 
@@ -381,14 +444,17 @@ class Display:
 
     def retry(self):
         """Shows the quilt or the video that could not be shown, if any: when the Looking Glass is plugged in, or
-        switched on, after it. A video's player that has started tries again by itself."""
+        switched on, after it. A video's player that has started tries again by itself. After a restart, starts the
+        playlist that played."""
         with self.lock:
             try:
-                if self.quilt is not None and self.shown_on is None:
+                if self.run is not None and self.run.thread.ident is None:
+                    self.run.start()
+                elif self.quilt is not None and self.shown_on is None:
                     self._show()
                 elif self.video is not None and self.player is None:
                     self._play()
-            except RuntimeError:
+            except (RuntimeError, ValueError):
                 pass
 
     def start(self):
@@ -402,10 +468,12 @@ class Display:
     def stop(self):
         self.stopping.set()
         with self.lock:
+            self._end_run()
             self._stop_player()
         self.library.flush()
 
-    # What was shown last, to show it again after a restart: shown.json, with the library's id, or the test quilt.
+    # What was shown last, to show it again after a restart: shown.json, with the library's id, the test quilt, or the
+    # playlist.
 
     def _keep(self, shown):
         if self.state is None:
@@ -437,6 +505,11 @@ class Display:
                 self.quilt = Quilt(NUMBERS, 8, 6, bool(shown.get("reverse")), picture.shape[1], picture.shape[0],
                                    _now(), None)
                 self.picture = picture
+            return
+        if shown and shown.get("playlist") and self.playlist.playable():
+            with self.lock:
+                self.run = Run(self.playlist, self)
+            log.info("Taking back the playlist")
             return
         item = self.library.find(id=shown.get("id")) if shown else None
         if item is None:
@@ -525,7 +598,8 @@ class Display:
         """What the Looking Glass shows, as the API answers it."""
         with self.lock:
             nothing = {"source": None, "media": None, "name": None, "kind": None, "reverse": False, "shown": False,
-                       "shown_on": None, "error": None, "frame_rate": None, "decoder": None, "warning": None}
+                       "shown_on": None, "error": self.run.error if self.run else None, "frame_rate": None,
+                       "decoder": None, "warning": None, "playlist": self.run.progress() if self.run else None}
             if self.video is not None:
                 video, player = self.video, self.player
                 item = self.library.find(id=video.id)
@@ -603,7 +677,8 @@ TAGS = [
     {"name": "grades", "description": "How a quilt's light and colours are changed when it is shown: "
                                       "kept beside the quilt, whose file stays as uploaded."},
     {"name": "display", "description": "What the Looking Glass shows: a medium of the library, the test pattern, "
-                                       "or black."},
+                                       "the playlist, or black."},
+    {"name": "playlist", "description": "Which media play one after the other, and for how long each."},
     {"name": "server", "description": "The server, the screen and the Looking Glass's calibration."},
 ]
 
@@ -660,6 +735,39 @@ class NameRequest(BaseModel):
                       examples=["my helix_qs8x6a0.75.mp4"])
 
 
+class EntryModel(BaseModel):
+    media_id: str = Field(description="A medium of the library.", examples=["3f9a1c2e"])
+    enabled: bool = Field(True, description="Whether it is played: false keeps only its settings, for when it is "
+                                            "played again.", examples=[True])
+    seconds: Optional[float] = Field(None, ge=1, le=86400, examples=[SECONDS],
+                                     description="How long a quilt is shown, in seconds; null for a video. "
+                                                 f"{SECONDS} if not given.")
+    loops: Optional[int] = Field(None, ge=1, le=1000, examples=[None],
+                                 description="How often a video plays before the next medium; null for a quilt. "
+                                             f"{LOOPS} if not given.")
+
+
+class PlaylistModel(BaseModel):
+    repeat: bool = Field(True, description="Whether it starts again after the last medium; otherwise it ends, black.",
+                         examples=[True])
+    transition: Literal[TRANSITIONS] = Field(
+        CUT, examples=["cross fade"],
+        description="How one medium goes into the next: cut, at once, or a transition, which the GPU draws; without "
+                    "it, --screen gl, always cut.")
+    transition_seconds: float = Field(TRANSITION_SECONDS, ge=0.1, le=10, examples=[TRANSITION_SECONDS],
+                                      description="How long a transition takes, in seconds: the first ones of the "
+                                                  "next medium.")
+    items: list[EntryModel] = Field(description="The media, each once at most. They play in the library's order, that "
+                                                "of GET /api/media, whatever theirs here; those not given are not "
+                                                "played.")
+
+
+class ProgressModel(BaseModel):
+    position: Optional[int] = Field(None, description="Which medium of the playlist is shown, from 1; null if it is "
+                                                      "not played any more.", examples=[2])
+    count: int = Field(description="How many media the playlist plays.", examples=[5])
+
+
 class DisplayModel(BaseModel):
     source: Optional[str] = Field(None, description="Where what is shown comes from: media, the library; test "
                                                     "pattern; default, the server's default quilt; or null, black.",
@@ -679,6 +787,8 @@ class DisplayModel(BaseModel):
     decoder: Optional[str] = Field(None, description="What decodes a video: hardware, e.g. a Raspberry Pi 5's HEVC "
                                                      "decoder, or software, the processor.", examples=["hardware"])
     warning: Optional[str] = Field(None, description="What to change, for a video not in H.265 (HEVC).")
+    playlist: Optional[ProgressModel] = Field(None, description="While the playlist plays, where it is: what is shown "
+                                                                "is its medium. Otherwise null.")
 
 
 class DisplayRequest(BaseModel):
@@ -689,6 +799,7 @@ class DisplayRequest(BaseModel):
                                                   "the lenses, one number fills the screen; a mix of numbers means "
                                                   "that the calibration is wrong.")
     reverse: bool = Field(False, description="With test_pattern, its views in the other order.")
+    playlist: bool = Field(False, description="Play the playlist, from its first medium, see PUT /api/playlist.")
 
 
 class StatusModel(BaseModel):
@@ -885,7 +996,8 @@ def create_app(display, web=None):
 
     @app.delete("/api/media/{id}", tags=["media"], status_code=204, summary="Remove a medium", responses=NOT_FOUND)
     def remove_medium(id: str = FastApiPath(description="The medium's id.", examples=["3f9a1c2e"])):
-        """Removes the library's medium of this id, its file too. If the Looking Glass shows it, it shows black."""
+        """Removes the library's medium of this id, its file too. If the Looking Glass shows it, it shows black, or
+        the next medium while the playlist plays."""
         display.remove(find(id))
         return Response(status_code=204)
 
@@ -949,6 +1061,32 @@ def create_app(display, web=None):
         response.headers["Location"] = f"/api/media/{saved.id}"
         return display.item_status(saved)
 
+    # The playlist.
+
+    @app.get("/api/playlist", tags=["playlist"], response_model=PlaylistModel, summary="Get the playlist")
+    def get_playlist():
+        """Which media play one after the other, in the library's order, and for how long each. Whether it is playing
+        is in GET /api/display."""
+        playlist = display.playlist
+        return {"repeat": playlist.repeat, "transition": playlist.transition,
+                "transition_seconds": playlist.transition_seconds,
+                "items": [asdict(entry) for entry in playlist.entries()]}
+
+    @app.put("/api/playlist", tags=["playlist"], response_model=PlaylistModel, summary="Set the playlist",
+             responses={**error(400, "A medium given twice, seconds for a video, or loops for a quilt."),
+                        **error(404, "No medium of an id.")})
+    def put_playlist(request: PlaylistModel):
+        """Replaces the playlist. It is kept, also after a restart, and what the Looking Glass shows does not change:
+        PUT /api/display plays it. While it plays, the change counts from the next medium on."""
+        try:
+            display.playlist.set(request.repeat, [Entry(**item.model_dump()) for item in request.items],
+                                 request.transition, request.transition_seconds)
+        except KeyError as problem:
+            raise HTTPException(404, problem.args[0]) from problem
+        except ValueError as problem:
+            raise HTTPException(400, str(problem)) from problem
+        return get_playlist()
+
     # The display.
 
     @app.get("/api/display", tags=["display"], response_model=DisplayModel, summary="Get what is shown")
@@ -957,22 +1095,28 @@ def create_app(display, web=None):
         return display.display_status()
 
     @app.put("/api/display", tags=["display"], response_model=DisplayModel, summary="Show a medium",
-             responses={**error(400, "Not one of media_id, media_name and test_pattern."),
+             responses={**error(400, "Not one of media_id, media_name, test_pattern and playlist, or an empty "
+                                     "playlist."),
                         **error(404, "No medium of this id or name."), **NOT_YET})
     def put_display(request: DisplayRequest):
-        """Shows the library's quilt, or plays its video in a loop, by its id or its name, or the test pattern: at
-        once, as nothing is uploaded. It answers once it is on the Looking Glass, a video's first frame too; it
-        stays, also after a restart, until something else replaces it."""
-        if [request.media_id is not None, request.media_name is not None, request.test_pattern].count(True) != 1:
-            raise HTTPException(400, "give one of media_id, media_name and test_pattern, e.g. "
+        """Shows the library's quilt, or plays its video in a loop, by its id or its name, the test pattern, or the
+        playlist, one medium after the other: at once, as nothing is uploaded. It answers once it is on the Looking
+        Glass, a video's first frame too; it stays, also after a restart, until something else replaces it."""
+        if [request.media_id is not None, request.media_name is not None, request.test_pattern,
+                request.playlist].count(True) != 1:
+            raise HTTPException(400, "give one of media_id, media_name, test_pattern and playlist, e.g. "
                                      '{"media_name": "helix_qs8x6a0.75.mp4"}')
         try:
             if request.test_pattern:
                 display.show_test_pattern(request.reverse)
+            elif request.playlist:
+                display.play_playlist()
             else:
                 display.play(request.media_id, request.media_name)
         except KeyError as problem:
             raise HTTPException(404, problem.args[0]) from problem
+        except EmptyPlaylist as problem:
+            raise HTTPException(400, str(problem)) from problem
         except RuntimeError as problem:
             raise HTTPException(503, f"{_sentence(problem)} It is kept, and shown as soon as it can be.") from problem
         return display.display_status()

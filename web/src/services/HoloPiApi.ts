@@ -45,6 +45,24 @@ export type Display = {
   frame_rate: number | null;
   decoder: 'hardware' | 'software' | null;
   warning: string | null;
+  /** While the playlist plays, which of its media is shown, from 1, and of how many; null otherwise. */
+  playlist: { position: number | null; count: number } | null;
+};
+
+/** How a medium plays in the playlist: a quilt for some seconds, a video some times over; the other is null. Not
+ * enabled, it is not played, and its settings are kept. */
+export type PlaylistEntry = { media_id: string; enabled: boolean; seconds: number | null; loops: number | null };
+
+/** How one medium goes into the next: a cut at once, the others drawn by the GPU. */
+export type Transition = 'cut' | 'cross fade' | 'fade through black' | 'fade through white';
+
+/** The media that play one after the other, in the library's order whatever theirs here; again and again, or once. */
+export type Playlist = {
+  repeat: boolean;
+  transition: Transition;
+  /** How long a transition takes. */
+  transition_seconds: number;
+  items: PlaylistEntry[];
 };
 
 /** How a quilt's light and colours are changed when it is shown: the values by their parameters' ids, those left out
@@ -98,7 +116,12 @@ export interface HoloPiApi {
   getDisplay(signal?: AbortSignal): Promise<Result<Display>>;
   showMedium(id: string): Promise<Result<Display>>;
   showTestPattern(): Promise<Result<Display>>;
+  /** Plays the playlist, from its first medium. */
+  showPlaylist(): Promise<Result<Display>>;
   showBlack(): Promise<Result<void>>;
+  getPlaylist(signal?: AbortSignal): Promise<Result<Playlist>>;
+  /** Replaces the playlist, which it answers as it is now; what is shown does not change. */
+  setPlaylist(playlist: Playlist): Promise<Result<Playlist>>;
   /** The tools of a grade, section by section, in the order to show them. */
   listGradeParameters(signal?: AbortSignal): Promise<Result<GradeParameter[]>>;
   getGrade(id: string, signal?: AbortSignal): Promise<Result<Grade>>;

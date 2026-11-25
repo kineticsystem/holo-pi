@@ -16,9 +16,12 @@
   - [Grade a Quilt](#grade-a-quilt)
   - [Save a Graded Quilt](#save-a-graded-quilt)
   - [The Parameters](#the-parameters)
+- [The Playlist](#the-playlist)
+  - [Get the Playlist](#get-the-playlist)
+  - [Set the Playlist](#set-the-playlist)
 - [The Display](#the-display)
   - [What Is Shown](#what-is-shown)
-  - [Show a Medium or the Test Pattern](#show-a-medium-or-the-test-pattern)
+  - [Show a Medium, the Test Pattern or the Playlist](#show-a-medium-the-test-pattern-or-the-playlist)
   - [Show Black](#show-black)
 - [The Server](#the-server)
   - [The Status](#the-status)
@@ -39,7 +42,7 @@ The server listens on port 8095, e.g. `http://holo.local:8095`, where it serves 
 | `/api/docs` | Swagger UI: every request, with its fields, its answers and examples, and a form to try it. Its files are the server's own, so it works on a network without the internet. |
 | `/api/openapi.json` | The OpenAPI 3 description, to generate a client. |
 
-The API has two resources. The **media** are the quilts and videos kept in the server's library, on its disk; the **display** is what the Looking Glass shows. A medium is uploaded once, and shown as often as wanted, by its id or its name, at once.
+The API has three main resources. The **media** are the quilts and videos kept in the server's library, on its disk; the **playlist** says which of them play one after the other, and for how long; the **display** is what the Looking Glass shows. A medium is uploaded once, and shown as often as wanted, by its id or its name, at once.
 
 Requests and answers are JSON, except the upload, a multipart form, and a medium's content, its file. There is no authentication: keep the server on a network you trust. **Try it out**, in Swagger UI, changes what the Looking Glass shows and the library on its disk.
 
@@ -60,8 +63,10 @@ Requests and answers are JSON, except the upload, a multipart form, and a medium
 | `DELETE` | `/api/media/{id}/grade` | Removes its grade. | `204`, `400`, `404`, `501` |
 | `POST` | `/api/media/{id}/graded-copies` | Saves the quilt with its grade, as a new quilt. | `201`, `400`, `404`, `501`, `503` |
 | `GET` | `/api/grade-parameters` | What a grade is made of. | `200` |
+| `GET` | `/api/playlist` | Which media play one after the other. | `200` |
+| `PUT` | `/api/playlist` | Sets them, and for how long each. | `200`, `400`, `404` |
 | `GET` | `/api/display` | What the Looking Glass shows. | `200` |
-| `PUT` | `/api/display` | Shows a medium, by its id or its name, or the test pattern. | `200`, `400`, `404`, `503` |
+| `PUT` | `/api/display` | Shows a medium, by its id or its name, the test pattern, or the playlist. | `200`, `400`, `404`, `503` |
 | `DELETE` | `/api/display` | Shows black. | `204` |
 | `GET` | `/api/status` | The server, its screen, the Looking Glass, and what it shows. | `200` |
 | `GET` | `/api/calibration` | The Looking Glass's calibration. | `200`, `503` |
@@ -83,7 +88,7 @@ The server keeps the file in its library and answers with the [medium](#the-medi
 | `columns` | integer, 1 or more | from the name | Its columns of views, when its name does not say, e.g. 8. With `rows`, or not at all. |
 | `rows` | integer, 1 or more | from the name | Its rows of views, when its name does not say, e.g. 6. |
 | `reverse` | boolean | `false` | Shows its views in the other order, when the depth looks inside out. |
-| `play` | boolean | `false` | Shows it at once, too, as [`PUT /api/display`](#show-a-medium-or-the-test-pattern) would. The answer's `shown` says whether it is on the screen; `GET /api/display` says why not, e.g. the Looking Glass is off, and the server shows it as soon as it can. |
+| `play` | boolean | `false` | Shows it at once, too, as [`PUT /api/display`](#show-a-medium-the-test-pattern-or-the-playlist) would. The answer's `shown` says whether it is on the screen; `GET /api/display` says why not, e.g. the Looking Glass is off, and the server shows it as soon as it can. |
 
 A medium is of one of three kinds:
 
@@ -288,6 +293,63 @@ Answers the values of a grade, `items`, section by section, in the order to show
 | Color Mixer | `<band>_hue`, `<band>_saturation`, `<band>_luminance`, for the bands `red`, `orange`, `yellow`, `green`, `aqua`, `blue`, `purple` and `magenta` |
 | Effects | `structure`, `detail`, `sharpness` |
 
+## The Playlist
+
+The playlist says which media of the library play one after the other, and for how long each: a quilt is shown for some seconds, a video plays some times over. They play in the library's order, see [Order the Media](#order-the-media). `PUT /api/display` with `{"playlist": true}` plays it.
+
+### Get the Playlist
+
+```
+GET /api/playlist
+```
+
+```json
+{
+  "repeat": true,
+  "transition": "cross fade",
+  "transition_seconds": 1.0,
+  "items": [
+    {"media_id": "b44ef8ba", "enabled": true, "seconds": 15.0, "loops": null},
+    {"media_id": "8299c881", "enabled": true, "seconds": null, "loops": 2},
+    {"media_id": "c41d07aa", "enabled": false, "seconds": null, "loops": 5}
+  ]
+}
+```
+
+| Field | Default | What it is |
+|---|---|---|
+| `repeat` | `true` | Whether it starts again after the last medium. Otherwise it ends, and the Looking Glass shows black. |
+| `transition` | `cut` | How one medium goes into the next: `cut`, at once, `cross fade`, `fade through black` or `fade through white`. The GPU draws it: without it, i.e. not with `--screen gl`, the playlist always cuts. |
+| `transition_seconds` | `1` | How long a transition takes, 0.1 to 10. These are the first seconds of the next medium, not added to its own. |
+| `items` | | The media, in the library's order. One that is not among them is not played. |
+| `media_id` | | The medium. |
+| `enabled` | `true` | Whether it is played: `false` keeps its settings only. |
+| `seconds` | `10` | How long a quilt is shown, 1 to 86400; `null` for a video. |
+| `loops` | `1` | How often a video plays before the next medium, 1 to 1000; `null` for a quilt. |
+
+The playlist is empty at first. A medium removed from the library leaves it.
+
+### Set the Playlist
+
+```
+PUT /api/playlist
+Content-Type: application/json
+```
+
+The body is a playlist, which replaces the one before, e.g. a quilt for 15 seconds, then a video twice:
+
+```json
+{"items": [{"media_id": "b44ef8ba", "seconds": 15}, {"media_id": "8299c881", "loops": 2}]}
+```
+
+What the Looking Glass shows does not change. While the playlist plays, the change counts from the next medium on; with nothing left to play, it ends.
+
+| Status | When | Body |
+|---|---|---|
+| `200` | It is kept, also after a restart. | The playlist. |
+| `400` | A medium is given twice, `seconds` for a video, or `loops` for a quilt. | An [error](#errors). |
+| `404` | No medium of an id. | An [error](#errors). |
+
 ## The Display
 
 ### What Is Shown
@@ -308,7 +370,8 @@ GET /api/display
   "error": null,
   "frame_rate": 23.4,
   "decoder": "hardware",
-  "warning": null
+  "warning": null,
+  "playlist": {"position": 2, "count": 5}
 }
 ```
 
@@ -325,8 +388,9 @@ GET /api/display
 | `frame_rate` | A video's frames shown a second, lately: its `fps` when the server keeps up, less when it does not, e.g. when the processor decodes a detailed video, which then plays in slow motion. |
 | `decoder` | What decodes a video: `hardware`, the Pi 5's HEVC decoder, or `software`, the processor. |
 | `warning` | What to change, for a video not in H.265. |
+| `playlist` | While the playlist plays, which of its media is shown, `position`, from 1, or `null` if it is not played any more, and how many it has, `count`. Otherwise `null`. |
 
-### Show a Medium or the Test Pattern
+### Show a Medium, the Test Pattern or the Playlist
 
 ```
 PUT /api/display
@@ -338,13 +402,16 @@ Content-Type: application/json
 | `{"media_id": "8299c881"}` | The library's medium of this id. |
 | `{"media_name": "helix_qs8x6a0.75.mp4"}` | The library's medium of this name. |
 | `{"test_pattern": true}` | The test pattern: 48 views, each showing its number on a colour of its own. Through the lenses, one number fills the screen, and changes in order as we move sideways; a mix of numbers means that the calibration is wrong. With `"reverse": true`, its views in the other order. |
+| `{"playlist": true}` | The [playlist](#the-playlist), from its first medium. |
 
 The server shows a quilt, or plays a video in a loop, at its frame rate, and answers with [what is shown](#what-is-shown) once it is on the Looking Glass, a video's first frame too: on a Raspberry Pi 5, about 0.8 seconds for a quilt of 3360 x 3360, about 0.2 seconds for a video, as nothing is uploaded. It stays, also after a restart, until something else replaces it.
+
+The playlist goes from one medium to the next by itself, until something else is shown, or black. The last picture stays until the next one is ready, which then comes with the playlist's transition. A medium's time counts from when it is on the Looking Glass. One that cannot be shown at all, e.g. as its file is damaged, is left out. Removing the medium shown goes on to the next. After a restart, the playlist starts again from its first medium.
 
 | Status | When | Body |
 |---|---|---|
 | `200` | It is on the Looking Glass. | [What is shown](#what-is-shown). |
-| `400` | Not one of `media_id`, `media_name` and `test_pattern`. | An [error](#errors). |
+| `400` | Not one of `media_id`, `media_name`, `test_pattern` and `playlist`, or the playlist is empty. | An [error](#errors). |
 | `404` | No medium of this id or name. | An [error](#errors). |
 | `503` | It cannot be shown yet: no Looking Glass found, or no screen of its size. | An [error](#errors). It is kept, and shown as soon as it can be. |
 
@@ -415,7 +482,7 @@ Every error has the same body, with what went wrong and what to check:
 
 | Status | Meaning |
 |---|---|
-| `400` | The request cannot work, whatever the Looking Glass: not an image nor a video, no layout, a hologram video of another size, a name no file can have, a video to grade, no grade to save, or nothing to show. |
+| `400` | The request cannot work, whatever the Looking Glass: not an image nor a video, no layout, a hologram video of another size, a name no file can have, a video to grade, no grade to save, seconds for a video or loops for a quilt, an empty playlist, or nothing to show. |
 | `404` | No medium of this id or name. |
 | `409` | Another medium has the new name. |
 | `422` | A field is missing, of the wrong type or out of its range: `{"error": "invalid request: body.columns: ..."}`. |
@@ -440,6 +507,10 @@ curl http://holo.local:8095/api/media
 # The library in another order: every id, once.
 curl -X PUT -H "Content-Type: application/json" -d '{"ids": ["c41d07aa", "8299c881", "3f9a1c2e"]}' http://holo.local:8095/api/media/order
 curl http://holo.local:8095/api/display
+
+# A quilt for 15 seconds, then a video twice, again and again.
+curl -X PUT -H "Content-Type: application/json" -d '{"items": [{"media_id": "b44ef8ba", "seconds": 15}, {"media_id": "8299c881", "loops": 2}]}' http://holo.local:8095/api/playlist
+curl -X PUT -H "Content-Type: application/json" -d '{"playlist": true}' http://holo.local:8095/api/display
 
 # Black, then empty the library.
 curl -X DELETE http://holo.local:8095/api/display

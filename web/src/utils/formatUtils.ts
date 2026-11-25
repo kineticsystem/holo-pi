@@ -20,6 +20,15 @@ export function formatDuration(seconds: number | null): string {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 }
 
+/** A length of time, e.g. 20 seconds as "20 s", 80 as "1 min 20 s", 3700 as "1 h 1 min". */
+export function formatTimeSpan(seconds: number): string {
+  const whole = Math.round(seconds);
+  const [hours, minutes, rest] = [Math.floor(whole / 3600), Math.floor(whole / 60) % 60, whole % 60];
+  if (hours > 0) return minutes ? `${hours} h ${minutes} min` : `${hours} h`;
+  if (minutes > 0) return rest ? `${minutes} min ${rest} s` : `${minutes} min`;
+  return `${rest} s`;
+}
+
 /** A medium's layout, e.g. "8 × 6", or "hologram" for a video interleaved already. */
 export function formatLayout(columns: number | null, rows: number | null): string {
   return columns === null || rows === null ? 'hologram' : `${columns} × ${rows}`;

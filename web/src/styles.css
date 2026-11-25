@@ -92,3 +92,15 @@ label.slider.changed span, label.slider.changed output { color: var(--text); }
 label.slider input { grid-column: 1 / -1; width: 100%; margin: 0.2rem 0; accent-color: var(--accent); }
 form.rename { display: flex; flex-wrap: wrap; gap: 0.4rem; cursor: default; }
 form.rename input { font: inherit; max-width: 100%; box-sizing: border-box; background: #12151a; color: var(--text); border: 1px solid var(--accent); border-radius: 4px; padding: 0.2rem 0.4rem; }
+.tabs { display: flex; gap: 0.3rem; }
+.tabs a { color: var(--muted); text-decoration: none; padding: 0.45rem 1.1rem; border: 1px solid transparent; border-bottom: none; border-radius: 8px 8px 0 0; font-size: 1.05rem; }
+.tabs a:hover { color: var(--text); }
+.tabs a[aria-current] { background: var(--panel); border-color: var(--line); color: var(--text); font-weight: bold; margin-bottom: -1px; padding-bottom: calc(0.45rem + 1px); }
+.tabbed section { border-top-left-radius: 0; }
+.tabbed .totals { margin-top: 0; }
+table.playlist tbody tr { cursor: default; }
+table.playlist tbody tr.left-out td { color: var(--muted); }
+label.number { display: inline-flex; align-items: baseline; gap: 0.4rem; white-space: nowrap; }
+label.number input { width: 4.5rem; font: inherit; background: #12151a; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 0.1rem 0.3rem; }
+label.number input:disabled { opacity: 0.45; }
+label.number input[aria-invalid=true] { border-color: var(--danger); }

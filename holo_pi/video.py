@@ -1,4 +1,4 @@
-"""Videos for a Looking Glass: read one, and play it on a screen in a loop.
+"""Videos for a Looking Glass: read one, and play it on a screen, in a loop or a number of times.
 
 There are two kinds. A quilt video is a video whose every frame is a quilt: the
 GPU interleaves each frame as it is shown, see gl.py, or the processor, slowly,
@@ -42,6 +42,7 @@ AHEAD = 16
 # How far behind its time the player may fall, e.g. when decoding is slower than the frame rate, before it takes
 # the frame it has as the new start.
 RESYNC_S = 1
+END = object()  # What the decoder queues after the last frame.
 
 
 class VideoError(ValueError):
@@ -50,6 +51,10 @@ class VideoError(ValueError):
 
 class NoPyAV(RuntimeError):
     """No video can be played: PyAV is not installed."""
+
+
+class Unplayable(RuntimeError):
+    """What is to be shown cannot be, now or later, whatever the Looking Glass does: trying again is in vain."""
 
 
 @dataclass
@@ -134,26 +139,31 @@ def yuv_frames(frame):
 
 
 class Player:
-    """Plays a video in a loop, at its frame rate, until stop(): `convert` makes each frame ready, on the decoder's
+    """Plays a video in a loop, or `loops` times, at its frame rate, until stop(): `convert` makes each frame ready, on the decoder's
     thread, e.g. hologram_pictures(); `show` puts it on the screen, on the player's, and returns where.
 
     Two threads: the decoder decodes the frames ahead, again and again, into a queue of AHEAD frames, so that
     starting the video again, when its decoder fills up anew, does not stop the screen; the player shows each
     frame when its time comes, and skips the frames it is too late for, to keep time. When the screen fails, e.g.
-    because the Looking Glass is switched off, it tries again every RETRY_S. shown_on says where the video is shown
-    and error why not; started is set once the first frame is shown, or cannot be."""
+    because the Looking Glass is switched off, it tries the same frame again every RETRY_S, so that no video ends
+    unseen. shown_on says where the video is shown and error why not; started is set once the first frame is shown, or
+    cannot be; ended once the last frame of `loops` has had its time, and stays on the screen, or the video turns out
+    broken, which broken says."""
 
-    def __init__(self, path, show, convert=None):
+    def __init__(self, path, show, convert=None, loops=None):
         self.path = str(path)
         self.show = show
         self.convert = convert or hologram_pictures()
+        self.loops = loops  # None: again and again.
         self.shown_on = None
         self.error = None
         self.shown_at = collections.deque(maxlen=49)  # When the last frames were shown, for frame_rate().
         self.decoding = None  # "hardware" or "software", once the first frame is decoded.
         self.started = threading.Event()
+        self.ended = threading.Event()
+        self.broken = False
         self.stopping = threading.Event()
-        self.frames = queue.Queue(AHEAD)  # (when, period, picture), or the VideoError that ends the video.
+        self.frames = queue.Queue(AHEAD)  # (when, period, picture), END, or the VideoError that ends the video.
         self.thread = threading.Thread(target=self._run, name="video", daemon=True)
         self.decoder = threading.Thread(target=self._decode, name="video decoder", daemon=True)
 
@@ -173,8 +183,9 @@ class Player:
     def _decode(self):
         av = _av()
         offset = 0.0  # When this round starts, in seconds from the start of the first.
+        rounds = 0
         try:
-            while not self.stopping.is_set():
+            while not self.stopping.is_set() and (self.loops is None or rounds < self.loops):
                 with open_video(av, self.path) as container:
                     stream = container.streams.video[0]
                     stream.thread_type = "AUTO"  # On the processor, decoding on every core.
@@ -193,6 +204,8 @@ class Player:
                     if first is None:
                         raise VideoError("no frame in the video")
                 offset += length
+                rounds += 1
+            self._put(END)
         except (av.error.FFmpegError, ValueError) as error:  # The file: playing it again would fail again.
             self._put(VideoError(f"cannot play the video: {error}"))
 
@@ -211,13 +224,18 @@ class Player:
     def _run(self):
         origin = None  # When the first frame of the first round is due.
         shown = float("-inf")  # When the last frame was shown.
+        period = 0
         while not self.stopping.is_set():
             try:
                 item = self.frames.get(timeout=0.1)
             except queue.Empty:
                 continue
+            if item is END:
+                if not self.stopping.wait(max(0, shown + period - time.monotonic())):
+                    self.ended.set()
+                return
             if isinstance(item, VideoError):
-                self._failed(str(item))
+                self._break(str(item))
                 return
             at, period, picture = item
             now = time.monotonic()
@@ -231,17 +249,18 @@ class Player:
                 # Too late for this one, and the screen has just had one: the next one keeps time. When decoding
                 # is what is slow, every frame is shown, later than its time.
                 continue
-            try:
-                self._show(picture)
-            except ValueError as error:  # The video, e.g. a quilt larger than the GPU takes: it would fail again.
-                self._failed(f"cannot play the video: {error}")
-                return
-            except RuntimeError as error:  # The screen.
-                self._failed(str(error))
-                origin = None
-                if self.stopping.wait(RETRY_S):
+            while True:
+                try:
+                    self._show(picture)
+                    break
+                except ValueError as error:  # The video, e.g. a quilt larger than the GPU takes: it would fail again.
+                    self._break(f"cannot play the video: {error}")
                     return
-                continue
+                except RuntimeError as error:  # The screen.
+                    self._failed(str(error))
+                    origin = None
+                    if self.stopping.wait(RETRY_S):
+                        return
             shown = time.monotonic()
 
     def _show(self, picture):
@@ -258,6 +277,11 @@ class Player:
         if len(times) < 2 or time.monotonic() - times[-1] > 1:
             return None
         return (len(times) - 1) / (times[-1] - times[0])
+
+    def _break(self, error):
+        self.broken = True
+        self._failed(error)
+        self.ended.set()
 
     def _failed(self, error):
         if error != self.error:

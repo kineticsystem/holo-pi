@@ -18,6 +18,7 @@ Each pull request has a notes file here. It keeps what the pull request does not
 | [16-quilt-grading.md](16-quilt-grading.md) | [#16](https://github.com/kineticsystem/holo-pi/pull/16) Grade a quilt while the Looking Glass shows it, and rename a medium |
 | [17-graded-badge.md](17-graded-badge.md) | [#17](https://github.com/kineticsystem/holo-pi/pull/17) Mark the graded quilts |
 | [18-copy-grade.md](18-copy-grade.md) | [#18](https://github.com/kineticsystem/holo-pi/pull/18) Copy a grade from another quilt |
+| [19-playlist.md](19-playlist.md) | [#19](https://github.com/kineticsystem/holo-pi/pull/19) Play the library one medium after the other, with transitions |
 
 ## How to Write One
 

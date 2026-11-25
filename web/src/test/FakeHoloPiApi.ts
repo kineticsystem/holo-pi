@@ -1,5 +1,5 @@
 // A HoloPi API in memory, for the tests: a library, a display, and failures on request.
-import type { Display, Grade, GradeParameter, HoloPiApi, MediaList, Medium, ServerStatus, UploadOptions } from '../services/HoloPiApi';
+import type { Display, Grade, GradeParameter, HoloPiApi, MediaList, Medium, Playlist, ServerStatus, UploadOptions } from '../services/HoloPiApi';
 import { err, ok, type Result } from '../utils/result';
 
 export function medium(fields: Partial<Medium> = {}): Medium {
@@ -22,7 +22,7 @@ export const PARAMETERS = [
 
 const BLACK: Display = {
   source: null, media: null, name: null, kind: null, reverse: false, shown: false, shown_on: null, error: null,
-  frame_rate: null, decoder: null, warning: null,
+  frame_rate: null, decoder: null, warning: null, playlist: null,
 };
 
 export class FakeHoloPiApi implements HoloPiApi {
@@ -145,6 +145,47 @@ export class FakeHoloPiApi implements HoloPiApi {
 
   showTestPattern(): Promise<Result<Display>> {
     this.display = { ...BLACK, source: 'test pattern', name: 'numbers', kind: 'quilt', shown: true };
+    return this.answer(this.display);
+  }
+
+  playlist: Playlist = { repeat: true, transition: 'cut', transition_seconds: 1, items: [] };
+  /** The playlists setPlaylist() was asked for, in order. */
+  playlistsSet: Playlist[] = [];
+  /** Every setPlaylist() fails with this, when set. */
+  refusePlaylist: string | null = null;
+  /** Playlists wait for finishPlaylist(), to test what changes meanwhile. */
+  holdPlaylists = false;
+  private pendingPlaylists: (() => void)[] = [];
+  /** The playlist as it was, each time it was asked to play. */
+  plays: Playlist[] = [];
+
+  getPlaylist(): Promise<Result<Playlist>> {
+    return this.answer(this.playlist);
+  }
+
+  setPlaylist(playlist: Playlist): Promise<Result<Playlist>> {
+    this.playlistsSet.push(playlist);
+    const set = () => {
+      if (this.refusePlaylist) return Promise.resolve(err(this.refusePlaylist));
+      if (!this.failWith) this.playlist = playlist;
+      return this.answer(this.playlist);
+    };
+    if (!this.holdPlaylists) return set();
+    return new Promise(resolve => this.pendingPlaylists.push(() => void set().then(resolve)));
+  }
+
+  /** Lets the oldest playlist waiting be kept. */
+  finishPlaylist() {
+    this.pendingPlaylists.shift()?.();
+  }
+
+  showPlaylist(): Promise<Result<Display>> {
+    this.plays.push(this.playlist);
+    const played = this.playlist.items.filter(entry => entry.enabled);
+    const first = this.media.find(m => played.some(entry => entry.media_id === m.id));
+    if (!first) return Promise.resolve(err('the playlist is empty'));
+    this.display = { ...BLACK, source: 'media', media: first, name: first.name, kind: first.kind, shown: true,
+                     playlist: { position: 1, count: played.length } };
     return this.answer(this.display);
   }
 
