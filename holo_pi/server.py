@@ -46,6 +46,9 @@ from .numbers import numbers_quilt
 from .playlist import LOOPS, SECONDS, EmptyPlaylist, Entry, Playlist, Run
 from .quilt import read_quilt
 from .screen import open_screen
+from .transition import CUT
+from .transition import KINDS as TRANSITIONS
+from .transition import SECONDS as TRANSITION_SECONDS
 from .video import NoPyAV, Player, Unplayable, VideoError, hologram_pictures, step, yuv_frames
 
 log = logging.getLogger(__name__)
@@ -225,11 +228,13 @@ class Display:
             self._keep({"id": item.id})
             return self._show_item(item, picture)
 
-    def _show_item(self, item, picture, loops=None):
-        """Shows a library's item, a quilt's `picture`, or a video `loops` times, or in a loop. Returns where."""
+    def _show_item(self, item, picture, loops=None, kind=CUT):
+        """Shows a library's item, a quilt's `picture`, or a video `loops` times, or in a loop, after a transition of
+        this kind. Returns where."""
         path = self.library.path(item)
+        self._drop_video()  # First: a last frame of it must not go into the transition.
+        self._transition(kind)
         if item.is_video:
-            self._drop_video()
             self.quilt, self.picture, self.shown_on, self.error = None, None, None, None
             self.video = Video(item.name, item.width, item.height, item.fps, item.frames, item.duration, item.codec,
                                item.uploaded, str(path), item.columns, item.rows, item.reverse, item.id, loops)
@@ -281,7 +286,14 @@ class Display:
         be shown yet, Unplayable or ValueError if never."""
         with self.lock:
             if self.run is run:
-                self._show_item(item, picture, entry.loops)
+                # The same medium again, e.g. the only one, stays as it is.
+                kind = self.playlist.transition if item.id != self.shown_id() else CUT
+                self._show_item(item, picture, entry.loops, kind)
+
+    def _transition(self, kind):
+        """Has the next picture come with a transition, if the screen can, or ends the one under way."""
+        if hasattr(self.screen, "transition"):
+            self.screen.transition(kind, self.playlist.transition_seconds)
 
     def finish(self, run):
         """Shows black, as `run` is over, unless something else has been shown since."""
@@ -344,6 +356,8 @@ class Display:
         with self.lock:
             self._end_run()
             self._keep({"numbers": True, "reverse": reverse})
+            self._drop_video()
+            self._transition(CUT)
             self._set(Quilt(NUMBERS, 8, 6, reverse, picture.shape[1], picture.shape[0], _now(), None), picture)
             return self._show()
 
@@ -736,6 +750,13 @@ class EntryModel(BaseModel):
 class PlaylistModel(BaseModel):
     repeat: bool = Field(True, description="Whether it starts again after the last medium; otherwise it ends, black.",
                          examples=[True])
+    transition: Literal[TRANSITIONS] = Field(
+        CUT, examples=["cross fade"],
+        description="How one medium goes into the next: cut, at once, or a transition, which the GPU draws; without "
+                    "it, --screen gl, always cut.")
+    transition_seconds: float = Field(TRANSITION_SECONDS, ge=0.1, le=10, examples=[TRANSITION_SECONDS],
+                                      description="How long a transition takes, in seconds: the first ones of the "
+                                                  "next medium.")
     items: list[EntryModel] = Field(description="The media, each once at most. They play in the library's order, that "
                                                 "of GET /api/media, whatever theirs here; those not given are not "
                                                 "played.")
@@ -1046,7 +1067,10 @@ def create_app(display, web=None):
     def get_playlist():
         """Which media play one after the other, in the library's order, and for how long each. Whether it is playing
         is in GET /api/display."""
-        return {"repeat": display.playlist.repeat, "items": [asdict(entry) for entry in display.playlist.entries()]}
+        playlist = display.playlist
+        return {"repeat": playlist.repeat, "transition": playlist.transition,
+                "transition_seconds": playlist.transition_seconds,
+                "items": [asdict(entry) for entry in playlist.entries()]}
 
     @app.put("/api/playlist", tags=["playlist"], response_model=PlaylistModel, summary="Set the playlist",
              responses={**error(400, "A medium given twice, seconds for a video, or loops for a quilt."),
@@ -1055,7 +1079,8 @@ def create_app(display, web=None):
         """Replaces the playlist. It is kept, also after a restart, and what the Looking Glass shows does not change:
         PUT /api/display plays it. While it plays, the change counts from the next medium on."""
         try:
-            display.playlist.set(request.repeat, [Entry(**item.model_dump()) for item in request.items])
+            display.playlist.set(request.repeat, [Entry(**item.model_dump()) for item in request.items],
+                                 request.transition, request.transition_seconds)
         except KeyError as problem:
             raise HTTPException(404, problem.args[0]) from problem
         except ValueError as problem:

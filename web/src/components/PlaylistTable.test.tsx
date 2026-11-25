@@ -11,7 +11,7 @@ const items: PlaylistEntry[] = [{ media_id: 'q', enabled: true, seconds: 5, loop
 
 function setUp(entries = items, playingId: string | null = null) {
   const calls = { onEnable: vi.fn(), onEnableAll: vi.fn(), onSeconds: vi.fn(), onLoops: vi.fn() };
-  render(<PlaylistTable rows={makeRows(media, { repeat: true, items: entries })} playingId={playingId} {...calls} />);
+  render(<PlaylistTable rows={makeRows(media, entries)} playingId={playingId} {...calls} />);
   return calls;
 }
 

@@ -16,6 +16,7 @@ import threading
 from dataclasses import asdict, dataclass
 from typing import Optional
 
+from . import transition
 from .quilt import read_quilt
 from .video import Unplayable
 
@@ -49,6 +50,8 @@ class Playlist:
         self.library = library
         self.lock = threading.RLock()
         self.repeat = True  # Whether it starts again after the last medium, or ends, black.
+        self.transition = transition.CUT  # How one medium goes into the next, and how long that takes, in seconds.
+        self.transition_seconds = transition.SECONDS
         self.kept = {}  # The entries, by their media's ids, also of media gone since.
         self._load()
 
@@ -59,10 +62,13 @@ class Playlist:
             data = json.loads(self.path.read_text())
             self.kept = {entry["media_id"]: Entry(**entry) for entry in data["items"]}
             self.repeat = bool(data["repeat"])
+            if data.get("transition") in transition.KINDS:
+                self.transition = data["transition"]
+                self.transition_seconds = float(data["transition_seconds"])
         except (OSError, ValueError, TypeError, KeyError) as error:
             log.warning("Cannot read the playlist %s: %s", self.path, error)
 
-    def set(self, repeat, entries):
+    def set(self, repeat, entries, kind=transition.CUT, seconds=transition.SECONDS):
         """Replaces the playlist. Raises KeyError, its message the reason, for a medium the library does not have,
         and ValueError for one given twice, seconds for a video or loops for a quilt."""
         with self.lock:
@@ -78,17 +84,18 @@ class Playlist:
                 if not item.is_video and entry.loops is not None:
                     raise ValueError(f"{item.name} is a quilt: give seconds, how long it is shown, not loops")
                 kept[item.id] = entry
-            before = self.kept, self.repeat
-            self.kept, self.repeat = kept, repeat
+            before = self.kept, self.repeat, self.transition, self.transition_seconds
+            self.kept, self.repeat, self.transition, self.transition_seconds = kept, repeat, kind, seconds
             try:
                 self._save()
             except OSError:
-                self.kept, self.repeat = before
+                self.kept, self.repeat, self.transition, self.transition_seconds = before
                 raise
 
     def _save(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        data = {"repeat": self.repeat, "items": [asdict(entry) for entry in self.kept.values()]}
+        data = {"repeat": self.repeat, "transition": self.transition, "transition_seconds": self.transition_seconds,
+                "items": [asdict(entry) for entry in self.kept.values()]}
         temporary = self.path.with_name(self.path.name + ".tmp")
         temporary.write_text(json.dumps(data, indent=2))
         temporary.replace(self.path)

@@ -14,6 +14,7 @@
   - [DRM/KMS](#drmkms)
   - [The GPU](#the-gpu)
   - [The Grades](#the-grades)
+  - [The Transitions](#the-transitions)
 - [The Server](#the-server)
   - [The API](#the-api)
   - [The Library](#the-library)
@@ -70,6 +71,8 @@ What HoloPi uses of the system:
 | [`holo_pi/gl.py`](../holo_pi/gl.py) | The screen without a desktop, drawn by the GPU: the interleaving as an OpenGL ES shader, through GBM, EGL and ctypes. |
 | [`holo_pi/grade.py`](../holo_pi/grade.py) | A quilt's grade: its parameters, its values, and the numbers the GPU needs of them. |
 | [`holo_pi/gl_grade.py`](../holo_pi/gl_grade.py) | A quilt drawn with a grade by the GPU. |
+| [`holo_pi/transition.py`](../holo_pi/transition.py) | The names of the transitions. |
+| [`holo_pi/gl_transition.py`](../holo_pi/gl_transition.py) | A transition from one hologram to the next, drawn by the GPU. |
 | [`holo_pi/video.py`](../holo_pi/video.py) | Videos: reading one, with PyAV, and the `Player`, which decodes one, with the hardware decoder when there is one, and plays it on a screen, in a loop or a number of times. |
 | [`holo_pi/library.py`](../holo_pi/library.py) | The library: the media kept on disk, what each is, and its unique name and id. |
 | [`holo_pi/playlist.py`](../holo_pi/playlist.py) | The playlist: which media play one after the other, for how long each, and the `Run` that plays it. |
@@ -198,6 +201,17 @@ The `Renderer` keeps the `GradedQuilt` while the same picture is shown, and give
 
 `GlScreen.grade_quilt()` gives the whole quilt with a grade, to save it: a second `GradedQuilt`, without a calibration, runs the same shaders on each pixel of the quilt, `OF_THE_QUILT`, rather than on those the screen shows, `OF_THE_SCREEN`, so that the saved quilt looks exactly as the graded one did. `GpuGradeTest` compares the two.
 
+### The Transitions
+
+A transition blends the hologram on the screen into the next one. Each sub-pixel of the screen belongs to one view, so a blend sub-pixel by sub-pixel blends each view with the same view of the other, and both keep their depth. `Transition`, in [`gl_transition.py`](../holo_pi/gl_transition.py), keeps the two, already interleaved, in textures of the screen's size, 12 MB each, with a third for a transition that leaves from another, and draws their blend: two reads a pixel, where interleaving takes three reads of the quilt far apart.
+
+- **`GlScreen.transition(kind, seconds)`** says that the next picture comes with one. The `Renderer` first draws what is on the screen once more, into the first texture, with `redraw`, from the textures it still has: the quilt, the graded quilt, or the video's last frame.
+- **What is shown next,** a quilt, a grade or each frame of a video, is drawn into the second texture, until the transition is over: a video plays in it. Its time counts from the first of them.
+- **`GlScreen`'s thread** draws the steps in between by itself, when it has nothing else to do, one at each refresh, as a page flip waits for the one before. So `show_quilt()` returns at the first step, and neither the lock of `Display` nor the API waits for the end. A step that fails, e.g. as the Looking Glass was unplugged, shows the picture without it.
+- **`cut`,** or black, ends one at once. `Display` asks for a cut for all but the playlist, and stops the video before it asks for a transition: a frame of the old video would go into it as if it were the next picture.
+
+A texture must not be drawn into and read at once: `Transition` reads its own on texture units of their own, 8 and 9, and unbinds them after each blend. It leaves the `Renderer`'s program in use, as `GradedQuilt` does.
+
 ## The Server
 
 [`server.py`](../holo_pi/server.py) is `holo-pi serve`: FastAPI, on uvicorn, which runs on a thread of its own, while the main thread runs the screen. It shows one medium of its library at a time, a quilt or a video.
@@ -250,7 +264,7 @@ The player never takes the lock of `Display`: `Display` stops it, under its lock
 
 [`playlist.py`](../holo_pi/playlist.py) plays media one after the other. It has two classes:
 
-- **`Playlist`** is what to play: for each medium, whether it is played, and its seconds, for a quilt, or its loops, for a video; and whether to start again after the last. It is kept in `playlist.json` of the state folder. It has no order of its own: `next()` walks the library's, from the medium playing, or from the place it had if it was removed. A medium not played keeps its settings. One that is gone stays in the file until the next `set()`, and is never answered.
+- **`Playlist`** is what to play: for each medium, whether it is played, and its seconds, for a quilt, or its loops, for a video; whether to start again after the last, and the [transition](#the-transitions) from one to the next. It is kept in `playlist.json` of the state folder. It has no order of its own: `next()` walks the library's, from the medium playing, or from the place it had if it was removed. A medium not played keeps its settings. One that is gone stays in the file until the next `set()`, and is never answered.
 - **`Run`** plays it, on a thread of its own. It asks `next()`, reads the quilt, has `Display` show it, waits until its time is over, and asks again, so that a change of the playlist or of the library counts from the next medium on. A quilt's time counts from when `Display` says it is shown. A video's is over when its `Player` has `ended`: the decoder queues `END` after the last round, and the player waits out the last frame, which stays on the screen until the next medium replaces it.
 
 `Display.run` is the `Run` that plays, or `None`. Whatever else is shown goes through `_end_run()` under the lock of `Display`, and `show_next()` and `finish()` do nothing for a `Run` that is not `Display.run` any more: an old one, still reading its quilt, can never replace what was shown since. `Display` must not wait for a `Run`'s thread under its lock, which that thread takes to show a medium.
@@ -286,7 +300,7 @@ What cannot be shown yet is waited for, as `Display` tries it again by itself. W
 | `model/` | The one store, `holoPiReducer`, with `useReducer` behind a Context: the media, the playlist, what is shown and the server's status, as the server last said them. Which medium is shown is derived from the display, `selectShownId()`, never copied into the list; nor are the quilts whose grade can be copied, `selectGradeSources()`. |
 | `services/` | `HoloPiApi`, the interface of the API's client, and `makeHttpHoloPiApi()`, the real one: `fetch`, and `XMLHttpRequest` for the uploads, whose progress `fetch` cannot give. Errors are `Result`s, not exceptions. |
 | `hooks/` | The view models: `useGrade`, whose changes show at once and go to the server through `makeLatest()` of `utils/latestUtils.ts`, one at a time and the newest next, and which tells the store, with `mediumGraded`, whether the quilt is graded once the server has the change, as the library's list is not read again after grading. It copies another quilt's grade, which it reads from the server, drops if a change or a newer copy overtook it, and can undo. Then `useRoute`, the page its address asks for, `useLibrary`, whose `reorder` shows a new order at once, sends it, drops the answer of an order a newer one overtook, and reads the list again on a refusal, `useSelection`, the media ticked in the library, kept by id and derived from the list, so a medium gone is never selected, `useDisplay`, which sends one command at a time and keeps only the newest asked meanwhile, so that arrowing through the library shows the medium it stops on rather than each one it passes, `useUploads`, a queue that sends the files one after another, each with its progress and stoppable with an `AbortController`, `usePlaylist`, whose changes show at once and go to the server through `makeLatest()`, as a grade's, whose `play` waits for the last of them, and which goes back to what the server has when it refuses one, and `useServerStatus`. `useUploads` shows the first file of those dropped together, a single one too, and keeps the views' order: the page asks only a layout, `UploadLayout`, and the API's `play` and `reverse` stay for `curl` and scripts. |
-| `components/` | Components that know only their props: the media table, which moves through its rows with `stepThrough()` of `utils/listUtils.ts`, the drop zone, the upload's form and queue, the display's card, a button that asks twice, the tabs, the playlist's table and its number fields, and the grading's list of quilts to copy a grade from, and its sections and sliders, drawn from the parameters the server lists. |
+| `components/` | Components that know only their props: the media table, which moves through its rows with `stepThrough()` of `utils/listUtils.ts`, the drop zone, the upload's form and queue, the display's card, a button that asks twice, the tabs, the playlist's table, its transition and its number fields, and the grading's list of quilts to copy a grade from, and its sections and sliders, drawn from the parameters the server lists. |
 | `features/` | The panels, each a hook and its components: the header, with the link to `/api/docs`, the display, the upload, the library and the play tab, `#/play`, side by side as tabs, and the grading page, `#/grade/<id>`, which hides the panels rather than removing them, so that the uploads go on. |
 | `test/` | The fake API, in memory, and the wrapper that renders with it. |
 
@@ -317,9 +331,11 @@ The page asks what the Looking Glass shows every 2 seconds, `useDisplayPolling()
 | `VideoTest`, in [`test_video.py`](../tests/test_video.py) | Reading a video, one refused, the sizes of a hologram video, every frame shown in order and again, one column of each two, the frame rate, decoding slower than the frame rate, playing on while the video starts again, a number of rounds and their end, the screen coming back, with the frame it missed, and a broken file. The videos are small and lossless, FFV1, so that every pixel can be checked. Skipped without PyAV. |
 | `VideoTest`, in [`test_server.py`](../tests/test_server.py) | Hologram videos through the API, of 3072 x 2048, with a fake screen and a Portrait's calibration: one played and looped, its decoder, frame rate and warning, one of another size refused, a quilt replacing it, both kept, a video kept while the screen is off, or while there is no calibration, and played later, the last video after a restart, `501` without PyAV, the removal of the video shown, and a server without a state folder. Skipped without PyAV. |
 | `QuiltVideoTest`, in [`test_server.py`](../tests/test_server.py) | Quilt videos and the GPU's screen: a quilt video interleaved by the processor without a GPU, handed to a fake GPU screen as YUV frames with its layout, a quilt handed to it too, the layout from the fields, a video without a layout taken for a hologram video, and the last quilt video after a restart. Skipped without PyAV. |
-| `PlaylistTest`, in [`test_server.py`](../tests/test_server.py) | The playlist, of quilts, through the API: empty, kept, in the library's order, refused for an unknown medium, one given twice or loops for a quilt; played one after the other, each for its time, again or once, ended by anything else shown, black or an upload; changed, emptied, or its media removed while it plays; waiting for the Looking Glass, leaving out a damaged file, and after a restart. |
-| `VideoPlaylistTest`, in [`test_server.py`](../tests/test_server.py) | The playlist, of a video and a quilt, with a fake GPU screen: a video's loops, then the quilt, and back, a video shown by itself still looping, a damaged one left out, and one that waits for the Looking Glass. Skipped without PyAV. |
+| `PlaylistTest`, in [`test_server.py`](../tests/test_server.py) | The playlist, of quilts, through the API: empty, kept, in the library's order, refused for an unknown medium, one given twice or loops for a quilt; played one after the other, each for its time, again or once, ended by anything else shown, black or an upload; changed, emptied, or its media removed while it plays; waiting for the Looking Glass, leaving out a damaged file, after a restart, and its transition, kept, and left out without a GPU. |
+| `VideoPlaylistTest`, in [`test_server.py`](../tests/test_server.py) | The playlist, of a video and a quilt, with a fake GPU screen: a video's loops, then the quilt, and back, a video shown by itself still looping, a damaged one left out, one that waits for the Looking Glass, and the transition before each, but not for what is shown by itself or the same medium again. Skipped without PyAV. |
 | `GlTest`, in [`test_gl.py`](../tests/test_gl.py) | The GPU's interleaving, off screen, against the processor's: a quilt, its views reversed, another layout, a video frame in YUV, a hologram copied as it is, RGB and XRGB, a quilt larger than the GPU takes, and black. Skipped without EGL and OpenGL ES 3. |
+| `TransitionTest`, in [`test_transition.py`](../tests/test_transition.py) | The transitions, off screen: each starts with the one hologram and ends with the other, its middle, each view blended with the same view, from and to a graded quilt, a grade changed meanwhile, a video in it and left from its last frame, one that leaves from another, a cut, black, and a quilt refused. Skipped without EGL and OpenGL ES 3. |
+| `ScreenTest`, in [`test_transition.py`](../tests/test_transition.py) | `GlScreen`'s thread: the steps it draws by itself, what is asked meanwhile, and a step that fails. Skipped without EGL and OpenGL ES 3. |
 | `GradeTest`, in [`test_grade.py`](../tests/test_grade.py) | The parameters, what of a grade is kept, its ranges, the white balance, the tone curve and the mixer. |
 | `GpuGradeTest`, in [`test_grade.py`](../tests/test_grade.py) | The GPU's grading, off screen: each tool, a nearly neutral grade within one level of the quilt as it is, the interleaving against the processor's, each view filtered alone, no rim on a black sky, and what is kept and given back between pictures. Skipped without EGL and OpenGL ES 3. |
 | `GradeTest`, in [`test_server.py`](../tests/test_server.py) | The grades through the API, with a fake GPU screen: graded at once when shown, kept when not, switched off, removed, said of the medium everywhere it is answered, saved as a new quilt, after a restart, written after the last change, refused for a video, without a GPU or out of its range. |
@@ -340,7 +356,7 @@ Checked by hand:
 | The server | `holo-pi serve`, then `curl -F file=@quilts/helix_qs8x6a0.75.jpg -F play=true http://localhost:8095/api/media`; unplug the Looking Glass's HDMI, upload again, plug it in: the quilt shows within 5 seconds. |
 | The container | `./docker/dock.sh start` on a Raspberry Pi without a desktop, an upload from another computer, then a reboot of the Pi: the same quilt comes back. |
 | The videos | `curl -F file=@quilts/helix_qs8x6a0.75.mp4 -F play=true http://holo.local:8095/api/media`: it plays smoothly, in depth, and starts again without a pause; `GET /api/display` gives a `frame_rate` near 24 and `decoder` `hardware`. The same with one of the Portrait's own videos, from its drive. Then a quilt: the video stops, and `docker stats` shows the server idle. |
-| The playlist | On the web page's **Play** tab, tick two quilts and two videos, one of them 2 times, and **Play**: each follows the one before with no black between them, and the videos start smoothly. Switch the Portrait off and on: the playlist goes on. |
+| The playlist | On the web page's **Play** tab, tick two quilts and two videos, one of them 2 times, and **Play**: each follows the one before with no black between them, and the videos start smoothly. Switch the Portrait off and on: the playlist goes on. Then the same with each transition, between quilts, a graded one too, and into and out of a video: they are smooth, and the pictures keep their depth. |
 | The interleaving | `holo-pi show` with a quilt that looks right with Looking Glass's own software on another computer. |
 
 ## How to Extend HoloPi
@@ -352,6 +368,8 @@ Checked by hand:
 **Change the web page.** Follow the `react-developer` skill: state in the store, rules in a hook with its test, components that know only their props. `pnpm typecheck`, `pnpm test` and `pnpm build` in `web/`, then `./docker/dock.sh build` on the Pi.
 
 **Add a tool to the grades.** Add its `Parameter` to `PARAMETERS` of `grade.py`: the API, its documentation and the web page follow. Then draw it in `gl_grade.py`: in `TABLE_LAYER` if it looks at a pixel alone, in `AROUND` and `SCREEN`, and in `SPATIAL`, if it looks around. Add its test to `GpuGradeTest`.
+
+**Add a transition.** Add its name to `KINDS` of `transition.py`, and its shape to the shader of `gl_transition.py`, where `kind` is its place in `KINDS`: nothing of the next hologram at 0, all of it at 1, which `TransitionTest` checks for each. Add it to `Transition` of `HoloPiApi` and to `TRANSITIONS` of `playlistUtils.ts` for the web page.
 
 **Show on another kind of screen.** Write a class with `show`, `clear`, `run` and `close`, as [The Screens](#the-screens) describes, and open it in `open_screen()`.
 
@@ -396,6 +414,8 @@ Checked by hand:
 **The server plays the playlist, not the page.** It goes on with the browser closed and after a power cut, and the player knows when a video has played its last frame. The price: a thread more, and the rules of [The Playlist](#the-playlist) between it and the requests.
 
 **One order, the library's.** The playlist plays in it, so there is one order to set and to show. The price: no playlist in another order, and no medium twice.
+
+**Transitions between holograms, not between quilts.** Both are interleaved once, and every picture the `Renderer` draws, graded or a video's frame, goes through them the same way. The price: about 36 MB of the GPU's memory once there was one, and no slide, as a hologram moved is under other lenses.
 
 **Names unique in the library.** A client then shows a medium by the name of its file, without keeping ids, and uploading a file again replaces it rather than keeping two. The price: two files of the same name from two folders replace each other.
 

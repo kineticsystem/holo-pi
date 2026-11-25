@@ -148,7 +148,7 @@ export class FakeHoloPiApi implements HoloPiApi {
     return this.answer(this.display);
   }
 
-  playlist: Playlist = { repeat: true, items: [] };
+  playlist: Playlist = { repeat: true, transition: 'cut', transition_seconds: 1, items: [] };
   /** The playlists setPlaylist() was asked for, in order. */
   playlistsSet: Playlist[] = [];
   /** Every setPlaylist() fails with this, when set. */

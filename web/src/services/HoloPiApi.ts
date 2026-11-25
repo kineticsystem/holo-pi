@@ -53,8 +53,17 @@ export type Display = {
  * enabled, it is not played, and its settings are kept. */
 export type PlaylistEntry = { media_id: string; enabled: boolean; seconds: number | null; loops: number | null };
 
+/** How one medium goes into the next: a cut at once, the others drawn by the GPU. */
+export type Transition = 'cut' | 'cross fade' | 'fade through black' | 'wipe' | 'iris' | 'dissolve';
+
 /** The media that play one after the other, in the library's order whatever theirs here; again and again, or once. */
-export type Playlist = { repeat: boolean; items: PlaylistEntry[] };
+export type Playlist = {
+  repeat: boolean;
+  transition: Transition;
+  /** How long a transition takes. */
+  transition_seconds: number;
+  items: PlaylistEntry[];
+};
 
 /** How a quilt's light and colours are changed when it is shown: the values by their parameters' ids, those left out
  * at their defaults. Not enabled, the quilt is shown as uploaded, and the values are kept. */

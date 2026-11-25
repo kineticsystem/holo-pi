@@ -2,9 +2,9 @@
 // and stop it. A change shows at once and goes to the server, which keeps it; while one is on its way, only the newest
 // waits. Play starts what the page shows: it waits for the last change to be kept.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { selectPlaying, selectShownId } from '../model/holoPiStore';
+import { selectNoTransitions, selectPlaying, selectShownId } from '../model/holoPiStore';
 import { useHoloPiStore } from '../model/HoloPiStoreContext';
-import type { Playlist } from '../services/HoloPiApi';
+import type { Playlist, Transition } from '../services/HoloPiApi';
 import { useServices } from '../services/ServicesContext';
 import { makeLatest } from '../utils/latestUtils';
 import { makeRows, toEntries, totalTime, type PlaylistRow } from '../utils/playlistUtils';
@@ -42,19 +42,20 @@ export function usePlaylist() {
   }, [read]);
 
   const { media, playlist } = state;
-  const rows = media && playlist ? makeRows(media, playlist) : null;
+  const rows = media && playlist ? makeRows(media, playlist.items) : null;
   const playing = selectPlaying(state);
   const count = rows?.filter(row => row.enabled).length ?? 0;
   const canPlay = count > 0 && !display.pending && !starting;
 
-  function apply(next: PlaylistRow[], repeat: boolean) {
-    const changed = { repeat, items: toEntries(next) };
+  function apply(next: PlaylistRow[], fields: Partial<Omit<Playlist, 'items'>> = {}) {
+    if (!playlist) return;
+    const changed = { ...playlist, ...fields, items: toEntries(next) };
     dispatch({ type: 'playlistRead', playlist: changed });
     latest.send(changed);
   }
 
   function change(id: string, fields: Partial<Pick<PlaylistRow, 'enabled' | 'seconds' | 'loops'>>) {
-    if (rows && playlist) apply(rows.map(row => (row.medium.id === id ? { ...row, ...fields } : row)), playlist.repeat);
+    if (rows) apply(rows.map(row => (row.medium.id === id ? { ...row, ...fields } : row)));
   }
 
   async function play() {
@@ -69,6 +70,10 @@ export function usePlaylist() {
   return {
     rows,
     repeat: playlist?.repeat ?? true,
+    transition: playlist?.transition ?? 'cut',
+    transitionSeconds: playlist?.transition_seconds ?? 1,
+    /** Why there are no transitions, if so. */
+    noTransitions: selectNoTransitions(state),
     /** How many media play, and how long they take, one time through. */
     count,
     total: totalTime(rows ?? []),
@@ -81,12 +86,18 @@ export function usePlaylist() {
     error: error ?? display.error,
     setEnabled: (id: string, enabled: boolean) => change(id, { enabled }),
     setAllEnabled(enabled: boolean) {
-      if (rows && playlist) apply(rows.map(row => ({ ...row, enabled })), playlist.repeat);
+      if (rows) apply(rows.map(row => ({ ...row, enabled })));
     },
     setSeconds: (id: string, seconds: number) => change(id, { seconds }),
     setLoops: (id: string, loops: number) => change(id, { loops }),
     setRepeat(repeat: boolean) {
-      if (rows) apply(rows, repeat);
+      if (rows) apply(rows, { repeat });
+    },
+    setTransition(transition: Transition) {
+      if (rows) apply(rows, { transition });
+    },
+    setTransitionSeconds(seconds: number) {
+      if (rows) apply(rows, { transition_seconds: seconds });
     },
     play,
     stop: () => display.showBlack(),

@@ -60,15 +60,20 @@ class GpuScreen(FakeScreen):
     def __init__(self):
         super().__init__()
         self.quilts, self.frames_shown = [], []
+        self.events = []  # The transitions, and what is shown, in order.
 
     grades = True
 
     def show_quilt(self, picture, layout, calibration, reverse=False, grade=None):
         if not self.on:
             raise RuntimeError("no screen of 1536 x 2048")
+        self.events.append("quilt")
         self.quilts.append((picture.shape, (layout.columns, layout.rows), reverse))
         self.grade = grade
         return "the fake GPU"
+
+    def transition(self, kind, seconds):
+        self.events.append((kind, seconds))
 
     def grade_quilt(self, picture, layout, calibration, grade):
         if not self.on:
@@ -76,6 +81,7 @@ class GpuScreen(FakeScreen):
         return 255 - picture
 
     def show_quilt_frame(self, frame, layout, calibration, reverse=False):
+        self.events.append("frame")
         self.frames_shown.append((frame.format.name, frame.width, frame.height, (layout.columns, layout.rows)))
         return "the fake GPU"
 
@@ -675,7 +681,7 @@ class PlaylistTest(ApiTest):
         return seen
 
     def test_is_empty_at_first(self):
-        self.assertEqual(self.client.get("/api/playlist").json(), {"repeat": True, "items": []})
+        self.assertEqual(self.client.get("/api/playlist").json(), {"repeat": True, "transition": "cut", "transition_seconds": 1, "items": []})
         response = self.show(playlist=True)
         self.assertEqual(response.status_code, 400)
         self.assertIn("the playlist is empty", response.json()["error"])
@@ -685,13 +691,35 @@ class PlaylistTest(ApiTest):
         a, b, c = self.ids
         response = self.put({"media_id": c, "seconds": 3.5}, {"media_id": a}, repeat=False)
         self.assertEqual(response.status_code, 200, response.text)
-        kept = {"repeat": False, "items": [{"media_id": a, "enabled": True, "seconds": 10, "loops": None},
-                                           {"media_id": c, "enabled": True, "seconds": 3.5, "loops": None}]}
+        kept = {"repeat": False, "transition": "cut", "transition_seconds": 1,
+                "items": [{"media_id": a, "enabled": True, "seconds": 10, "loops": None},
+                          {"media_id": c, "enabled": True, "seconds": 3.5, "loops": None}]}
         self.assertEqual(response.json(), kept)
         _, client = self.server(FakeScreen())
         self.assertEqual(client.get("/api/playlist").json(), kept)
         self.client.put("/api/media/order", json={"ids": [c, b, a]})
         self.assertEqual([item["media_id"] for item in self.client.get("/api/playlist").json()["items"]], [c, a])
+
+    def test_keeps_the_transition_also_after_a_restart(self):
+        response = self.put(transition="cross fade", transition_seconds=2.5)
+        self.assertEqual(response.status_code, 200, response.text)
+        _, client = self.server(FakeScreen())
+        kept = client.get("/api/playlist").json()
+        self.assertEqual((kept["transition"], kept["transition_seconds"]), ("cross fade", 2.5))
+        for wrong in ({"transition": "explode"}, {"transition_seconds": 0}, {"transition_seconds": 11}):
+            self.assertEqual(self.put(**wrong).status_code, 422, wrong)
+
+    def test_takes_a_playlist_kept_before_there_were_transitions(self):
+        (self.state / "playlist.json").write_text(json.dumps({"repeat": False, "items": [{"media_id": self.ids[0]}]}))
+        _, client = self.server(FakeScreen())
+        kept = client.get("/api/playlist").json()
+        self.assertEqual((kept["repeat"], kept["transition"], len(kept["items"])), (False, "cut", 1))
+
+    def test_without_a_gpu_it_plays_without_transitions(self):
+        a, b, _ = self.ids
+        self.display.playlist.set(True, [Entry(a, seconds=0.2), Entry(b, seconds=0.2)], "cross fade")
+        self.show(playlist=True)
+        self.assertEqual(self.watch(lambda seen: len(seen) == 3), [a, b, a])
 
     def test_setting_it_changes_nothing_on_the_screen(self):
         self.put({"media_id": self.ids[0]})
@@ -905,6 +933,28 @@ class VideoPlaylistTest(ApiTest):
         self.display.playlist.set(True, [Entry(self.video), Entry(self.quilt_id, seconds=0.1)])
         self.show(playlist=True)
         wait_for(lambda: len(self.screen.quilts) >= 3, "three rounds")
+
+    def test_each_medium_comes_with_the_transition(self):
+        self.display.playlist.set(True, [Entry(self.video), Entry(self.quilt_id, seconds=60)], "wipe", 0.5)
+        self.show(playlist=True)
+        wait_for(lambda: self.screen.quilts, "the quilt")
+        # Begun after the last frame of the video, whose player has stopped, and before the quilt.
+        events = [event for event, after in zip(self.screen.events, self.screen.events[1:] + [None]) if event != after]
+        self.assertEqual(events, [("wipe", 0.5), "frame", ("wipe", 0.5), "quilt"])
+
+    def test_what_is_shown_by_itself_comes_at_once(self):
+        self.display.playlist.set(True, [Entry(self.quilt_id, seconds=60)], "wipe")
+        self.show(playlist=True)
+        for other in ({"media_id": self.quilt_id}, {"test_pattern": True}):
+            self.screen.events.clear()
+            self.show(**other)
+            self.assertEqual(self.screen.events, [("cut", 1), "quilt"])
+
+    def test_the_only_medium_stays_without_a_transition(self):
+        self.display.playlist.set(True, [Entry(self.quilt_id, seconds=0.1)], "wipe")
+        self.show(playlist=True)
+        wait_for(lambda: len(self.screen.quilts) >= 3, "the same again")
+        self.assertEqual(self.screen.events[:4], [("wipe", 1), "quilt", ("cut", 1), "quilt"])
 
     def test_a_video_shown_by_itself_still_loops(self):
         self.display.playlist.set(True, [Entry(self.video), Entry(self.quilt_id, seconds=60)])

@@ -1,6 +1,6 @@
 // The playlist as the play tab shows it: every medium of the library, with how it plays, also those never in the
 // playlist, at the defaults. Used by usePlaylist and the playlist's table.
-import type { Medium, Playlist, PlaylistEntry } from '../services/HoloPiApi';
+import type { Medium, PlaylistEntry, Transition } from '../services/HoloPiApi';
 
 /** How long a quilt is shown, and how often a video plays, unless changed: the server's defaults. */
 export const DEFAULT_SECONDS = 10;
@@ -8,6 +8,17 @@ export const DEFAULT_LOOPS = 1;
 /** The limits the server takes. */
 export const SECONDS_RANGE = { min: 1, max: 86400 };
 export const LOOPS_RANGE = { min: 1, max: 1000 };
+export const TRANSITION_RANGE = { min: 0.1, max: 10 };
+
+/** The transitions, in the order to list them, as the user reads them. */
+export const TRANSITIONS: { kind: Transition; label: string }[] = [
+  { kind: 'cut', label: 'None' },
+  { kind: 'cross fade', label: 'Cross fade' },
+  { kind: 'fade through black', label: 'Fade through black' },
+  { kind: 'wipe', label: 'Wipe' },
+  { kind: 'iris', label: 'Iris' },
+  { kind: 'dissolve', label: 'Dissolve' },
+];
 
 export type PlaylistRow = {
   medium: Medium;
@@ -21,8 +32,8 @@ export type PlaylistRow = {
 };
 
 /** A row for each medium, in the library's order. */
-export function makeRows(media: Medium[], playlist: Playlist): PlaylistRow[] {
-  const entries = new Map(playlist.items.map(entry => [entry.media_id, entry]));
+export function makeRows(media: Medium[], items: PlaylistEntry[]): PlaylistRow[] {
+  const entries = new Map(items.map(entry => [entry.media_id, entry]));
   return media.map(medium => {
     const entry = entries.get(medium.id);
     const enabled = entry?.enabled ?? false;

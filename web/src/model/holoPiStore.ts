@@ -73,6 +73,11 @@ export function holoPiReducer(state: HoloPiState, action: HoloPiAction): HoloPiS
   }
 }
 
+/** Why the playlist plays without transitions, or null if it can have them, through the GPU. */
+export function selectNoTransitions(state: HoloPiState): string | null {
+  return state.status && state.status.screen !== 'gl' ? 'Transitions need the GPU: --screen gl' : null;
+}
+
 /** The quilt that can be graded, the one the Looking Glass shows, and why none can, if so. */
 export function selectGradable(state: HoloPiState): { id: string; why: null } | { id: null; why: string } {
   if (state.status && state.status.screen !== 'gl') return { id: null, why: 'Grading needs the GPU: --screen gl' };

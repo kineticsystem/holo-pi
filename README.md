@@ -279,10 +279,11 @@ The **Play** tab of the web page plays quilts and videos of the library one afte
 
 - They play in the library's order: drag a row in the **Library** tab to change it.
 - **Repeat** starts again after the last one. Without it, the Looking Glass shows black at the end.
+- **Transition** is how one goes into the next, and how long that takes: a cross fade, a fade through black, a wipe, an iris or a dissolve, or none. The pictures keep their depth, as each view goes into the same view of the next. The Pi's GPU draws it, `--screen gl`, as in the container; otherwise it is disabled and says why.
 - **Stop** shows black.
 - A change counts from the next medium on, with nothing to start again.
 
-The Pi plays them by itself: the browser can be closed, and after a restart the Pi plays them again, from the first. Anything else shown ends it: a click on a row of the library, the test pattern, or an upload from the page, which shows its first file. The last picture stays on the Portrait until the next one is ready, about 0.8 seconds for a quilt and about 0.2 for a video on a Pi 5.
+The Pi plays them by itself: the browser can be closed, and after a restart the Pi plays them again, from the first. Anything else shown ends it: a click on a row of the library, the test pattern, or an upload from the page, which shows its first file. The last picture stays on the Portrait until the next one is ready, and the transition starts, about 0.8 seconds for a quilt and about 0.2 for a video on a Pi 5.
 
 A script does the same with [the API](docs/API.md#the-playlist), e.g. a quilt for 15 seconds, then a video twice:
 

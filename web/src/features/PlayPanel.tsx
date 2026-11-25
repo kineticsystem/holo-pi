@@ -1,5 +1,6 @@
 // The play tab: which media of the library play one after the other, for how long each, and the buttons to play them.
 import { ErrorMessage } from '../components/ErrorMessage';
+import { TransitionSelect } from '../components/TransitionSelect';
 import { PlaylistTable } from '../components/PlaylistTable';
 import { usePlaylist } from '../hooks/usePlaylist';
 import { formatTimeSpan } from '../utils/formatUtils';
@@ -18,6 +19,9 @@ export function PlayPanel() {
           <input type="checkbox" checked={playlist.repeat} disabled={playlist.rows === null}
                  onChange={event => playlist.setRepeat(event.target.checked)} /> Repeat
         </label>
+        <TransitionSelect transition={playlist.transition} seconds={playlist.transitionSeconds}
+                          disabled={playlist.rows === null} why={playlist.noTransitions}
+                          onTransition={playlist.setTransition} onSeconds={playlist.setTransitionSeconds} />
         <span>
           {playlist.count === 0 ? 'Tick what to play'
             : `${playlist.count} media, ${exact ? '' : 'more than '}${formatTimeSpan(seconds)}`}

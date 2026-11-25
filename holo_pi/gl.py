@@ -20,16 +20,21 @@ the second when GBM is opened on the second, the one with the screen.
 import ctypes
 import ctypes.util
 import errno
+import logging
 import os
 import queue
 import select
 import threading
+import time
 from concurrent.futures import Future
 from ctypes import POINTER, byref, c_char_p, c_float, c_int, c_uint, c_uint32, c_uint64, c_void_p
 
 import numpy as np
 
 from .drm import CARDS, PAGE_FLIP_EVENT, _check, _library, find_output
+from .transition import CUT
+
+log = logging.getLogger(__name__)
 
 # How long a page flip may take: a refresh, 17 ms at 60 Hz, unless the screen is gone.
 FLIP_TIMEOUT_S = 1
@@ -256,7 +261,10 @@ class Renderer:
     from a quilt, RGB or a video's YUV 4:2:0 frame, interleaved by the shader, or from a hologram already, copied.
 
     Its textures come in two sets, used in turn: a frame goes into one while the GPU may still draw from the other,
-    so that the copy does not wait for the drawing."""
+    so that the copy does not wait for the drawing. They also keep what is on the screen, to draw it once more when a
+    transition leaves from it, see gl_transition.py."""
+
+    clock = staticmethod(time.monotonic)
 
     def __init__(self, width, height):
         self.gl = gl = libraries().gl
@@ -274,6 +282,8 @@ class Renderer:
         self.sets = [[None] * 3, [None] * 3]  # Per set and plane: (texture, format, width, height).
         self.turn = 0
         self.graded = None  # The quilt shown with a grade, see gl_grade.py.
+        self.redraw = None  # Draws what is on the screen once more; None for black.
+        self.mover = None  # The transitions, once there is one.
 
     def _uniform(self, name):
         return self.gl.glGetUniformLocation(self.program, name.encode())
@@ -318,9 +328,49 @@ class Renderer:
         gl.glUniform2i(uniform("grid"), layout.columns, layout.rows)
         gl.glUniform2i(uniform("quiltSize"), *quilt_size)
 
+    def _put(self, draw):
+        """Draws a hologram with `draw`, into a transition, if there is one."""
+        self.redraw = draw
+        if self.mover is not None and self.mover.armed:
+            with self.mover.target():
+                draw()
+            self.mover.blend(self.clock())
+        else:
+            draw()
+
+    def transition(self, kind, seconds):
+        """The next hologram comes with a transition of this kind from the one on the screen, and what is drawn until
+        it is over goes into it; CUT ends one at once. step() draws it on."""
+        if kind == CUT:
+            if self.mover is not None:
+                self.mover.cancel()
+            return
+        if self.mover is None:
+            from .gl_transition import Transition
+            self.mover = Transition(self)
+        mover, now = self.mover, self.clock()
+        self.mover.begin(kind, seconds, (lambda: mover.blend(now)) if mover.moving else (self.redraw or self._clear))
+
+    @property
+    def moving(self):
+        """Whether a transition is under way: step() again."""
+        return self.mover is not None and self.mover.moving
+
+    def step(self):
+        """Draws the transition under way as it is now."""
+        self.mover.blend(self.clock())
+
     def _draw(self, source, layout=None, calibration=None, reverse=False, quilt_size=(1, 1)):
+        """Draws the hologram of what was uploaded last."""
+        textures = [texture[0] for texture in self.sets[self.turn] if texture is not None]
+        self._put(lambda: self._draw_textures(textures, source, layout, calibration, reverse, quilt_size))
+
+    def _draw_textures(self, textures, source, layout, calibration, reverse, quilt_size):
         gl, uniform = self.gl, self._uniform
         gl.glUseProgram(self.program)
+        for unit, texture in enumerate(textures):
+            gl.glActiveTexture(GL_TEXTURE0 + unit)
+            gl.glBindTexture(GL_TEXTURE_2D, texture)
         gl.glUniform1i(uniform("source"), source)
         gl.glUniform2f(uniform("screen"), self.width, self.height)
         if calibration is not None:
@@ -337,7 +387,8 @@ class Renderer:
             if self.graded is None:
                 from .gl_grade import GradedQuilt
                 self.graded = GradedQuilt(self, key, picture, layout, calibration, reverse)
-            self.graded.draw(grade)
+            graded = self.graded
+            self._put(lambda: graded.draw(grade))
             return
         picture = np.ascontiguousarray(picture)
         height, width = picture.shape[:2]
@@ -353,6 +404,7 @@ class Renderer:
         sizes = [(width, height), ((width + 1) // 2, (height + 1) // 2), ((width + 1) // 2, (height + 1) // 2)]
         self._upload([(GL_R8, GL_RED, w, h, plane.line_size, plane.buffer_ptr)
                       for plane, (w, h) in zip(frame.planes, sizes)])
+        self.gl.glUseProgram(self.program)
         rows, offset = YUV[(getattr(frame, "colorspace", 0) == BT709, getattr(frame, "color_range", 0) == FULL_RANGE)]
         self.gl.glUniform3fv(self._uniform("toRgb"), 3, (c_float * 9)(*np.ravel(rows)))
         self.gl.glUniform3f(self._uniform("yuvOffset"), *offset)
@@ -385,9 +437,15 @@ class Renderer:
         if self.graded is not None:
             graded, self.graded = self.graded, None
             graded.close()
+            self.redraw = None
 
     def black(self):
         self._drop_graded()
+        self.transition(CUT, 0)
+        self.redraw = None
+        self._clear()
+
+    def _clear(self):
         self.gl.glClearColor(0, 0, 0, 1)
         self.gl.glClear(GL_COLOR_BUFFER_BIT)
 
@@ -468,6 +526,7 @@ class GlScreen:
         self.fd = self.output = self.saved = None
         self.device = self.surface = self.display = self.context = self.window = None
         self.renderer = None
+        self.last = None  # What _present() was given last, to show it after a transition fails.
         self.framebuffers = {}  # Per GBM buffer, its DRM framebuffer.
         self.on_screen = self.pending = None  # The GBM buffers on the screen, and the one a page flip will put there.
         threading.Thread(target=self._work, name="gl", daemon=True).start()
@@ -476,7 +535,11 @@ class GlScreen:
 
     def _work(self):
         while True:
-            job, future = self.jobs.get()
+            try:
+                job, future = self.jobs.get(block=self.renderer is None or not self.renderer.moving)
+            except queue.Empty:  # The next step of a transition: the page flip before it keeps it to the refreshes.
+                self._step()
+                continue
             if future.set_running_or_notify_cancel():
                 try:
                     future.set_result(job())
@@ -508,6 +571,17 @@ class GlScreen:
             calibration.width, calibration.height,
             lambda renderer: renderer.quilt_frame(frame, layout, calibration, reverse)))
 
+    def transition(self, kind, seconds):
+        """The next picture shown comes with a transition from the one on the screen, see transition.py, drawn while
+        the caller goes on; what is shown meanwhile, e.g. a video's frames, goes into it. CUT ends one at once."""
+        def job():
+            if self.renderer is not None:
+                try:
+                    self.renderer.transition(kind, seconds)
+                except RuntimeError as error:  # The next picture comes without.
+                    log.warning("No transition: %s", error)
+        self._call(job)
+
     def grade_quilt(self, picture, layout, calibration, grade):
         """The quilt itself with a grade, an RGB array, worked out by the GPU: what is shown does not change."""
         def job():
@@ -538,7 +612,20 @@ class GlScreen:
 
     # On the screen's thread only.
 
+    def _step(self):
+        try:
+            self.renderer.step()
+            self._flip()
+        except Exception as error:  # noqa: BLE001 - nobody waits for it, and the screen's thread must go on.
+            log.warning("The transition failed: %s", error)
+            self._release()
+            try:
+                self._present(*self.last)  # The screen may be back already; if not, what is shown next says why.
+            except Exception as again:  # noqa: BLE001
+                log.warning("Cannot show the picture after it: %s", again)
+
     def _present(self, width, height, draw):
+        self.last = width, height, draw
         if self.output is not None and self.output.size != (width, height):
             self._release()
         for attempt in range(2):

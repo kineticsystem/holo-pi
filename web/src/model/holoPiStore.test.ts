@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { medium } from '../test/FakeHoloPiApi';
-import { holoPiReducer, initialState, selectGradable, selectGradeSources, selectPlaying, selectShownId } from './holoPiStore';
+import { holoPiReducer, initialState, selectGradable, selectGradeSources, selectNoTransitions, selectPlaying, selectShownId } from './holoPiStore';
 
 const listed = holoPiReducer(initialState, {
   type: 'mediaListed', list: { items: [medium({ id: 'a', size: 100 }), medium({ id: 'b', size: 50 })], size: 150, free: 1000 },
@@ -75,6 +75,12 @@ describe('the store', () => {
     expect(selectPlaying(listed)).toBe(false);
     const display = { ...initialDisplay(), playlist: { position: 1, count: 2 } };
     expect(selectPlaying(holoPiReducer(listed, { type: 'displayRead', display }))).toBe(true);
+  });
+
+  test('transitions need the GPU', () => {
+    const status = { version: '0.1.0', looking_glass: null, calibration_error: null, display: initialDisplay() };
+    expect(selectNoTransitions(holoPiReducer(listed, { type: 'statusRead', status: { ...status, screen: 'gl' } }))).toBeNull();
+    expect(selectNoTransitions(holoPiReducer(listed, { type: 'statusRead', status: { ...status, screen: 'drm' } }))).toContain('GPU');
   });
 
   test('the quilt shown can be graded, through the GPU, and nothing else', () => {

@@ -306,6 +306,8 @@ GET /api/playlist
 ```json
 {
   "repeat": true,
+  "transition": "cross fade",
+  "transition_seconds": 1.0,
   "items": [
     {"media_id": "b44ef8ba", "enabled": true, "seconds": 15.0, "loops": null},
     {"media_id": "8299c881", "enabled": true, "seconds": null, "loops": 2},
@@ -317,6 +319,8 @@ GET /api/playlist
 | Field | Default | What it is |
 |---|---|---|
 | `repeat` | `true` | Whether it starts again after the last medium. Otherwise it ends, and the Looking Glass shows black. |
+| `transition` | `cut` | How one medium goes into the next: `cut`, at once, `cross fade`, `fade through black`, `wipe`, from the left, `iris`, from the middle, or `dissolve`, in squares. The GPU draws it: without it, i.e. not with `--screen gl`, the playlist always cuts. |
+| `transition_seconds` | `1` | How long a transition takes, 0.1 to 10. These are the first seconds of the next medium, not added to its own. |
 | `items` | | The media, in the library's order. One that is not among them is not played. |
 | `media_id` | | The medium. |
 | `enabled` | `true` | Whether it is played: `false` keeps its settings only. |
@@ -402,7 +406,7 @@ Content-Type: application/json
 
 The server shows a quilt, or plays a video in a loop, at its frame rate, and answers with [what is shown](#what-is-shown) once it is on the Looking Glass, a video's first frame too: on a Raspberry Pi 5, about 0.8 seconds for a quilt of 3360 x 3360, about 0.2 seconds for a video, as nothing is uploaded. It stays, also after a restart, until something else replaces it.
 
-The playlist goes from one medium to the next by itself, until something else is shown, or black. The last picture stays until the next one is ready. A medium's time counts from when it is on the Looking Glass. One that cannot be shown at all, e.g. as its file is damaged, is left out. Removing the medium shown goes on to the next. After a restart, the playlist starts again from its first medium.
+The playlist goes from one medium to the next by itself, until something else is shown, or black. The last picture stays until the next one is ready, which then comes with the playlist's transition. A medium's time counts from when it is on the Looking Glass. One that cannot be shown at all, e.g. as its file is damaged, is left out. Removing the medium shown goes on to the next. After a restart, the playlist starts again from its first medium.
 
 | Status | When | Body |
 |---|---|---|

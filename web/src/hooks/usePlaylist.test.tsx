@@ -28,9 +28,20 @@ test('a change shows at once, and the server keeps it', async () => {
   await act(async () => result.current.setRepeat(false));
   expect([result.current.count, result.current.total.seconds, result.current.repeat]).toEqual([1, 4, false]);
   await waitFor(() => expect(api.playlist).toEqual({
-    repeat: false, items: [{ media_id: 'q', enabled: true, seconds: 4, loops: null },
-                           { media_id: 'v', enabled: false, seconds: null, loops: 3 }],
+    repeat: false, transition: 'cut', transition_seconds: 1,
+    items: [{ media_id: 'q', enabled: true, seconds: 4, loops: null },
+            { media_id: 'v', enabled: false, seconds: null, loops: 3 }],
   }));
+});
+
+test('the transition is kept with the rest of the playlist', async () => {
+  const { api, result } = await setUp();
+  act(() => result.current.setAllEnabled(true));
+  act(() => result.current.setTransition('cross fade'));
+  await act(async () => result.current.setTransitionSeconds(2.5));
+  expect([result.current.transition, result.current.transitionSeconds, result.current.noTransitions]).toEqual(['cross fade', 2.5, null]);
+  await waitFor(() => expect(api.playlist).toMatchObject({ transition: 'cross fade', transition_seconds: 2.5, repeat: true }));
+  expect(api.playlist.items.map(entry => entry.enabled)).toEqual([true, true]);
 });
 
 test('all are ticked in one go, and a medium left out keeps its settings', async () => {
@@ -71,7 +82,7 @@ test('stop shows black', async () => {
 
 test('a change the server refuses is undone, says why, and does not play; then play works again', async () => {
   const { api, result } = await setUp(api => {
-    api.playlist = { repeat: true, items: [{ media_id: 'q', enabled: true, seconds: 5, loops: null }] };
+    api.playlist = { ...api.playlist, items: [{ media_id: 'q', enabled: true, seconds: 5, loops: null }] };
     api.refusePlaylist = "no medium of the id 'v'";
   });
   act(() => result.current.setSeconds('q', 9));

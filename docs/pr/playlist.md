@@ -32,9 +32,21 @@ We want the Looking Glass to play quilts and videos one after the other. We choo
 
 **Not the player of #8.** That one went from one video into the next in the same decoder, for two videos only. Here, quilts and videos mix, and each video has a player of its own.
 
+**Transitions blend two holograms, sub-pixel by sub-pixel.** Each sub-pixel belongs to one view, so each view fades into the same view of the other, and both keep their depth.
+
+**Cut, cross fade, fade through black, wipe, iris and dissolve.** One for the whole playlist, and how long it takes. A shape, e.g. a wipe's edge, lies at the screen's depth.
+
+**No slide.** A hologram moved sideways is under other lenses. It would have to be interleaved again at each step, too slow to be smooth on a Pi.
+
+**Two holograms kept, not two quilts.** Each is interleaved once, and a step only blends. Videos go through them too: the last frame of one stays still, the next one plays from its first frame.
+
+**The screen's thread draws them, not a request's.** The API answers meanwhile. Stop, a cut or another picture does not wait for the end.
+
+**Only in the playlist, and a cut by default.** A click on a row of the library still shows it at once. A playlist kept before plays as it did.
+
 ## Left Out
 
-A gapless change. The last picture stays until the next one is ready. It takes as long as showing that medium by hand: on a Pi 5, about 0.8 seconds for a quilt and 0.2 for a video.
+A change without a wait. The last picture, or a video's last frame, stays still until the next one is ready, and the transition starts then. It takes as long as showing that medium by hand: on a Pi 5, about 0.8 seconds for a quilt and 0.2 for a video.
 
 A playlist of one video starts it again with that same short pause. Showing the video from the library loops it without one.
 
@@ -42,8 +54,12 @@ Several playlists, an order of their own, a medium twice, and buttons for the ne
 
 Setting the seconds of every quilt in one go.
 
+A transition per medium, at the end of a playlist that does not repeat, and from black at the server's first picture.
+
+Transitions without the GPU.
+
 ## Open Items
 
-It is checked with a fake screen, and the repo's quilts and videos, on a PC: not yet on a Pi with a Portrait.
+It is checked with a fake screen, and the repo's quilts and videos, on a PC, the transitions with a PC's GPU off screen. To check on a Pi with a Portrait: how smooth the transitions are, above all into a video, and how they look through the lenses.
 
 The README's picture of the web page is older than the tabs, and is to be taken again on a Pi.
