@@ -18,13 +18,13 @@ test('a transition is chosen by its name', async () => {
 });
 
 test('one that takes time says how long, and takes fractions of a second', () => {
-  const calls = setUp('wipe');
+  const calls = setUp('cross fade');
   fireEvent.change(screen.getByLabelText('Seconds of the transition'), { target: { value: '0.5' } });
   expect(calls.onSeconds).toHaveBeenCalledWith(0.5);
 });
 
 test('without the GPU there are none, and it says why', () => {
-  setUp('wipe', 'Transitions need the GPU: --screen gl');
+  setUp('cross fade', 'Transitions need the GPU: --screen gl');
   expect(screen.getByLabelText('Transition')).toBeDisabled();
   expect(screen.getByLabelText('Transition')).toHaveValue('cut');
   expect(screen.getByTitle(/need the GPU/)).toBeInTheDocument();

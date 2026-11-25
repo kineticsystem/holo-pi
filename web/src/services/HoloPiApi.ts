@@ -54,7 +54,7 @@ export type Display = {
 export type PlaylistEntry = { media_id: string; enabled: boolean; seconds: number | null; loops: number | null };
 
 /** How one medium goes into the next: a cut at once, the others drawn by the GPU. */
-export type Transition = 'cut' | 'cross fade' | 'fade through black' | 'wipe' | 'iris' | 'dissolve';
+export type Transition = 'cut' | 'cross fade' | 'fade through black' | 'fade through white';
 
 /** The media that play one after the other, in the library's order whatever theirs here; again and again, or once. */
 export type Playlist = {

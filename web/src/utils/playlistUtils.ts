@@ -15,9 +15,7 @@ export const TRANSITIONS: { kind: Transition; label: string }[] = [
   { kind: 'cut', label: 'None' },
   { kind: 'cross fade', label: 'Cross fade' },
   { kind: 'fade through black', label: 'Fade through black' },
-  { kind: 'wipe', label: 'Wipe' },
-  { kind: 'iris', label: 'Iris' },
-  { kind: 'dissolve', label: 'Dissolve' },
+  { kind: 'fade through white', label: 'Fade through white' },
 ];
 
 export type PlaylistRow = {

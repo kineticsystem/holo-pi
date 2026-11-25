@@ -319,7 +319,7 @@ GET /api/playlist
 | Field | Default | What it is |
 |---|---|---|
 | `repeat` | `true` | Whether it starts again after the last medium. Otherwise it ends, and the Looking Glass shows black. |
-| `transition` | `cut` | How one medium goes into the next: `cut`, at once, `cross fade`, `fade through black`, `wipe`, from the left, `iris`, from the middle, or `dissolve`, in squares. The GPU draws it: without it, i.e. not with `--screen gl`, the playlist always cuts. |
+| `transition` | `cut` | How one medium goes into the next: `cut`, at once, `cross fade`, `fade through black` or `fade through white`. The GPU draws it: without it, i.e. not with `--screen gl`, the playlist always cuts. |
 | `transition_seconds` | `1` | How long a transition takes, 0.1 to 10. These are the first seconds of the next medium, not added to its own. |
 | `items` | | The media, in the library's order. One that is not among them is not played. |
 | `media_id` | | The medium. |

@@ -34,7 +34,9 @@ We want the Looking Glass to play quilts and videos one after the other. We choo
 
 **Transitions blend two holograms, sub-pixel by sub-pixel.** Each sub-pixel belongs to one view, so each view fades into the same view of the other, and both keep their depth.
 
-**Cut, cross fade, fade through black, wipe, iris and dissolve.** One for the whole playlist, and how long it takes. A shape, e.g. a wipe's edge, lies at the screen's depth.
+**Cut, cross fade, fade through black and fade through white.** One for the whole playlist, and how long it takes.
+
+**No wipe, iris or dissolve.** We had them, and took them out again: fades are enough. A playlist kept with one of them cuts.
 
 **No slide.** A hologram moved sideways is under other lenses. It would have to be interleaved again at each step, too slow to be smooth on a Pi.
 

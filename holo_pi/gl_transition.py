@@ -5,8 +5,7 @@ sub-pixel by sub-pixel blends each view with the same view of the other, so that
 keeps the two holograms, already interleaved, in textures of the screen's size, and draws a blend of them at each
 refresh, which is two reads a pixel, where interleaving again would be far slower.
 
-A shape, e.g. the edge of a wipe, is drawn on the screen itself, the same for every view, so that it lies at the
-screen's depth. What moves the pictures, e.g. a slide, cannot be drawn so: a hologram shifted is under other lenses.
+What moves the pictures, e.g. a slide, cannot be drawn so: a hologram shifted is under other lenses.
 """
 
 from ctypes import byref, c_int, c_uint
@@ -23,41 +22,19 @@ FRAGMENT = b"""#version 300 es
 precision highp float;
 precision highp int;
 uniform mediump sampler2D before, after;
-uniform vec2 screen;
 uniform int kind;
 uniform float progress;
 out vec4 colour;
 
-const float EDGE = 0.08;  // How wide a soft edge is, of the way it goes.
-const float BLOCK = 32.0;  // A dissolve's squares, in pixels: wider than a lens, so that every view sees them whole.
-
-// How much of the next hologram is seen where the edge comes at `when`, 0 to 1: none at 0, all at 1.
-float reached(float when, float edge) {
-    return clamp((progress * (1.0 + edge) - when) / edge, 0.0, 1.0);
-}
-
-float noise(vec2 p) {
-    uvec2 q = uvec2(p) * uvec2(1597334673u, 3812015801u);
-    uint n = (q.x ^ q.y) * 1597334673u;
-    n ^= n >> 15;
-    n *= 2246822519u;
-    n ^= n >> 13;
-    return float(n >> 8) / 16777216.0;
-}
-
 void main() {
     ivec2 at = ivec2(gl_FragCoord.xy);
     vec3 a = texelFetch(before, at, 0).rgb, b = texelFetch(after, at, 0).rgb;
-    vec2 uv = gl_FragCoord.xy / screen;
-    float share = progress;  // A cross fade.
-    if (kind == 2) {  // Through black.
-        colour = vec4(progress < 0.5 ? a * (1.0 - 2.0 * progress) : b * (2.0 * progress - 1.0), 1.0);
+    if (kind == 1) {  // A cross fade.
+        colour = vec4(mix(a, b, progress), 1.0);
         return;
     }
-    if (kind == 3) share = reached(uv.x, EDGE);  // A wipe, from the left.
-    if (kind == 4) share = reached(length(gl_FragCoord.xy - screen / 2.0) / length(screen / 2.0), EDGE);  // An iris.
-    if (kind == 5) share = reached(noise(floor(gl_FragCoord.xy / BLOCK)), 2.0 * EDGE);  // A dissolve.
-    colour = vec4(mix(a, b, share), 1.0);
+    vec3 through = vec3(kind == 3 ? 1.0 : 0.0);  // White, or black.
+    colour = vec4(progress < 0.5 ? mix(a, through, 2.0 * progress) : mix(through, b, 2.0 * progress - 1.0), 1.0);
 }
 """
 
@@ -118,7 +95,6 @@ class Transition:
             gl.glActiveTexture(GL_TEXTURE0 + unit)
             gl.glBindTexture(GL_TEXTURE_2D, texture)
             gl.glUniform1i(uniform(name), unit)
-        gl.glUniform2f(uniform(b"screen"), self.renderer.width, self.renderer.height)
         gl.glUniform1i(uniform(b"kind"), KINDS.index(self.kind))
         gl.glUniform1f(uniform(b"progress"), progress * progress * (3 - 2 * progress))  # Starts and ends gently.
         gl.glDrawArrays(GL_TRIANGLES, 0, 3)

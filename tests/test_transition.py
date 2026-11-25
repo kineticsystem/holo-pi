@@ -63,26 +63,10 @@ class TransitionTest(unittest.TestCase):
         self.renderer.hologram(B)
         self.assertLessEqual(int(self.at(1).max()), 1)
 
-    def test_a_wipe_comes_from_the_left(self):
-        self.renderer.transition("wipe", 2)
+    def test_through_white_is_white_in_the_middle(self):
+        self.renderer.transition("fade through white", 2)
         self.renderer.hologram(B)
-        middle = self.at(1)
-        np.testing.assert_array_equal(middle[:, :300], B[:, :300])
-        np.testing.assert_array_equal(middle[:, -300:], A[:, -300:])
-
-    def test_an_iris_opens_from_the_middle(self):
-        self.renderer.transition("iris", 2)
-        self.renderer.hologram(B)
-        middle = self.at(1)
-        self.assertEqual((middle[1024, 768, 0], middle[0, 0, 0], middle[-1, -1, 0]), (40, 200, 200))
-
-    def test_a_dissolve_mixes_squares_of_both(self):
-        self.renderer.transition("dissolve", 2)
-        self.renderer.hologram(B)
-        middle = self.at(1)[..., 0]
-        for value in (40, 200):
-            self.assertGreater((middle == value).mean(), 0.25)
-        self.assertEqual(len(np.unique(middle[-32:, :32])), 1)  # One square, from the bottom left.
+        self.assertGreaterEqual(int(self.at(1).min()), 254)
 
     def test_blends_each_sub_pixel_of_two_quilts_with_the_same_view(self):
         self.renderer.quilt(numbered_quilt(), PORTRAIT, CALIBRATION)
@@ -157,7 +141,7 @@ class TransitionTest(unittest.TestCase):
         self.renderer.transition("cross fade", 2)
         self.renderer.hologram(B)
         middle = self.at(1)
-        self.renderer.transition("wipe", 2)
+        self.renderer.transition("fade through white", 2)
         self.renderer.hologram(A)
         np.testing.assert_array_equal(self.renderer.read(), middle)
         np.testing.assert_array_equal(self.at(4), A)
